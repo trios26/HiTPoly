@@ -1,0 +1,62 @@
+LAMMPS data file hand-converted from https://pubs.acs.org/doi/full/10.1021/acs.jctc.7b00520?ref=recommended
+
+4 atoms
+3 bonds
+3 angles
+3 impropers
+
+2 atom types
+1 bond types
+1 angle types
+1 improper types
+
+-50.0 50.0 xlo xhi
+-50.0 50.0 ylo yhi
+-50.0 50.0 zlo zhi
+
+Masses
+
+1 14.007
+2 15.999
+
+Pair Coeffs
+
+1   0.170   3.150
+2   0.210   2.860
+
+Bond Coeffs
+
+1   317.1   1.256
+
+Angle Coeffs
+
+1   60.41   120.0
+
+Improper Coeffs
+
+1   1.000   -1   2
+
+Atoms
+
+1 1 1  0.794 -0.02843839    0.03081818    0.11315888
+2 1 2 -0.598 -0.24626406    1.0356566     0.81809034
+3 1 2 -0.598 -0.98864385   -0.63422271   -0.58027868
+4 1 2 -0.598  1.2633463    -0.43225207    0.03310383
+
+Bonds
+
+1 1 1 2
+2 1 1 3
+3 1 1 4
+
+Angles
+
+1 1 2 1 3
+2 1 2 1 4
+3 1 3 1 4
+
+Impropers
+
+1 1 1 2 3 4 
+2 1 1 3 2 4 
+3 1 1 4 2 3 
