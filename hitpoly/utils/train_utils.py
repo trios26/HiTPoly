@@ -21,34 +21,15 @@ def calc_ff(
     predict=False,
     epoch=None,
 ):
-    if train_args.dipole_loss:
-        (
-            true_batch,
-            pred_batch,
-            dipole,
-            all_charges,
-            true_dipole,
-            true_charges,
-            geometries,
-        ) = force_field.calculate(
-            train_args.ff_type,
-            calc,
-            molecule,
-            batch,
-            debug=debug,
-            test_geoms=test_geoms,
-            predict=predict,
-            epoch=epoch,
-        )
-    else:
-        true_batch, pred_batch, true_charges = force_field.calculate(
-            train_args.ff_type,
-            calc,
-            molecule,
-            batch,
-            debug=debug,
-            test_geoms=test_geoms,
-        )
+
+    true_batch, pred_batch, true_charges = force_field.calculate(
+        train_args.ff_type,
+        calc,
+        molecule,
+        batch,
+        debug=debug,
+        test_geoms=test_geoms,
+    )
 
     if lammps:
         if train_args.discrete_flag:
@@ -70,18 +51,7 @@ def calc_ff(
             pair_params,
             molecule,
         )
-    if train_args.dipole_loss:
-        return (
-            true_batch.to(train_args.device),
-            pred_batch.to(train_args.device),
-            dipole.to(train_args.device),
-            all_charges.to(train_args.device),
-            true_dipole.to(train_args.device),
-            true_charges.to(train_args.device),
-            geometries.double().to(train_args.device),
-        )
-    else:
-        return true_batch, pred_batch, true_charges.to(train_args.device)
+    return true_batch, pred_batch, true_charges.to(train_args.device)
 
 
 def extra_loss_calc(params, param_type: str, extra_loss, train_args):
