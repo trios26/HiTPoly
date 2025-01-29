@@ -21,9 +21,6 @@ from hitpoly.utils.constants import (
     SIGMA_ATOMS,
     EPSILON_ATOMS,
     CHARGES,
-    D_CHARGES,
-    D_ALPHA,
-    D_THOLE,
     NUM_TO_ELEMENT,
     COUL_CONST,
 )
