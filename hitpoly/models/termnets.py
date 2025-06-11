@@ -5,7 +5,6 @@ from hitpoly.utils.args import hitpolyArgs
 from hitpoly.data.builder import TopologyBuilder
 from hitpoly.utils.nn_utils import weight_init_func
 
-from chemprop.nn_utils import get_activation_function
 
 
 class TermNet(nn.Module):

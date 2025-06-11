@@ -1,0 +1,28 @@
+[project]
+name = "hitpoly"
+version = "0.1.0"
+description = "High throughput polymer electrolyte MD simulation setup"
+authors = [
+    {name = "Jurgis Ruza"}
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.6"
+dependencies = [
+    "numpy>=1.20.0",
+    "pandas",
+    "scipy",
+    "torch",
+    "rdkit",
+    "openmm",
+    "matplotlib",
+    "typing-extensions",
+    "typed-argument-parser",
+]
+
+[tool.setuptools]
+packages = ["hitpoly"]
+
+[build-system]
+requires = ["setuptools>=64.0.0", "wheel"]
+build-backend = "setuptools.build_meta" 

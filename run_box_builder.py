@@ -4,6 +4,7 @@ import time
 import shutil
 import uuid
 from hitpoly.writers.box_builder import *
+from hitpoly.utils.building_utils import salt_string_to_values
 from hitpoly.simulations.gromacs_writer import GromacsWriter
 from distutils.dir_util import copy_tree
 import sys
@@ -22,11 +23,9 @@ def run(
     concentration: list = [100, 100],
     poly_name="PEO",
     charges="LPG",
+    salt_type="Li.TFSI",
     add_end_Cs=True,
     hitpoly_path=None,
-    salt_smiles=None,
-    salt_paths=None,
-    salt_data_paths=None,
     lit_charges_save_path=None,
     reaction="[Cu][*:1].[*:2][Au]>>[*:1]-[*:2]",
     product_index=0,
@@ -43,23 +42,11 @@ def run(
     if charges == "LIT" or charges == "DFT":
         lit_charges_save_path = f"/home/{os.getlogin()}/HiTPoly/data/forcefield_files"
 
-    if salt:
-        if not salt_smiles and not salt_paths and not salt_data_paths:
-            salt_path = f"{hitpoly_path}/data/pdb_files"
-            salt_smiles = ["[Li+]", "O=S(=O)([N-]S(=O)(=O)C(F)(F)F)C(F)(F)F"]
-            salt_paths = [
-                f"{salt_path}/geometry_file_Li.pdb",
-                f"{salt_path}/geometry_file_TFSI.pdb",
-            ]
-            salt_data_paths = [
-                f"{hitpoly_path}/data/forcefield_files/lammps_Li_q100.data",
-                f"{hitpoly_path}/data/forcefield_files/lammps_TFSI_q100.data",
-            ]
-        elif not salt_smiles or not salt_paths or not salt_data_paths:
-            raise ValueError(
-                "Must have an input all of these: salt_smiles, salt_paths and salt_data_paths or none."
-            )
+    if salt_type:
+        salt_smiles, salt_paths, salt_data_paths, ani_name_rdf = salt_string_to_values(ffnet_path, salt_type)
+        salt = True
     else:
+        salt = False
         salt_paths = []
         salt_data_paths = []
         salt_smiles = []
@@ -94,29 +81,22 @@ def run(
         platform="local",
     )
 
-    if ligpargen_repeats == repeats:
-        long_smiles = smiles
-        filename = "polymer_conformation.pdb"
-        shutil.move(f"{ligpargen_path}/PLY.pdb", f"{save_path}/{filename}")
-        minimize = False
-    else:
-        long_smiles, repeats = create_long_smiles(
-            smiles,
-            repeats=repeats,
-            add_end_Cs=add_end_Cs,
-            reaction=reaction,
-            product_index=product_index,
-        )
+    long_smiles, repeats = create_long_smiles(
+        smiles,
+        repeats=repeats,
+        add_end_Cs=add_end_Cs,
+        reaction=reaction,
+        product_index=product_index,
+    )
 
     print(f"Creating conformer files for monomer {smiles}, with {repeats} repeats")
     print(f"at path {save_path}")
-    if not ligpargen_repeats == repeats:
-        filename, mol, minimize = create_conformer_pdb(
-            save_path,
-            long_smiles,
-            name="polymer_conformation",
-            enforce_generation=enforce_generation,
-        )
+    filename, mol, minimize = create_conformer_pdb(
+        save_path,
+        long_smiles,
+        name="polymer_conformation",
+        enforce_generation=enforce_generation,
+    )
     print(f"Saved conformer pdb.")
 
     r, atom_names, atoms, bonds_typed = generate_atom_types(mol_inital, 2)
@@ -201,8 +181,9 @@ def run(
             temperature_step=20,
         )
 
-    copy_tree(save_path, f"{final_path}/{folder_name}")
-    print(f"Directory successfully coppied to {final_path}/{folder_name}")
+    if final_path:
+        copy_tree(save_path, f"{final_path}/{folder_name}")
+        print(f"Directory successfully coppied to {final_path}/{folder_name}")
 
 
 if __name__ == "__main__":
@@ -231,6 +212,11 @@ if __name__ == "__main__":
         "-pc",
         "--polymer_count",
         help="How many polymer chains or molecules to be packed",
+    )
+    parser.add_argument(
+        "--salt_type",
+        help="Type of the salt to be added to the simulation",
+        default="Li.TFSI",
     )
     parser.add_argument(
         "-c",
@@ -299,9 +285,6 @@ if __name__ == "__main__":
         help="What type of simulation to perform, options [conductivity, tg]}",
         default="conductivity",
     )
-    parser.add_argument(
-        "--salt", help="Should salt be added to the simulation", default="True"
-    )
     parser.add_argument("--temperature", help="Simulation temperature", default="430")
 
     args = parser.parse_args()
@@ -336,6 +319,7 @@ if __name__ == "__main__":
         poly_name=args.poly_name,
         charge_scale=float(args.charge_scale),
         polymer_count=int(args.polymer_count),
+        salt_type=args.salt_type,
         concentration=[int(args.concentration), int(args.concentration)],
         charges=args.charge_type,
         add_end_Cs=add_end_Cs,
@@ -344,6 +328,5 @@ if __name__ == "__main__":
         box_multiplier=float(args.box_multiplier),
         enforce_generation=args.enforce_generation,
         simu_type=args.simu_type,
-        salt=args.salt,
         simu_temp=int(args.temperature),
     )

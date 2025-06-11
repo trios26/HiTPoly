@@ -3,10 +3,10 @@ import os
 import time
 import shutil
 import uuid
-from ffnet.writers.box_builder import *
-from ffnet.utils.building_utils import salt_string_to_values
-from ffnet.simulations.gromacs_writer import GromacsWriter
-from ffnet.simulations.openmm_scripts import (
+from hitpoly.writers.box_builder import *
+from hitpoly.utils.building_utils import salt_string_to_values
+from hitpoly.simulations.gromacs_writer import GromacsWriter
+from hitpoly.simulations.openmm_scripts import (
     equilibrate_system_1,
     equilibrate_system_2,
     equilibrate_system_liquid,
@@ -31,16 +31,12 @@ def run(
     concentration: list = [100, 100],
     charges="LPG",
     add_end_Cs=True,
-    ffnet_path=None,
-    htvs_path=None,
+    hitpoly_path=None,
     lit_charges_save_path=None,
-    charges_path=None,
     reaction="[Cu][*:1].[*:2][Au]>>[*:1]-[*:2]",
     product_index=0,
     box_multiplier=2,
     enforce_generation=False,
-    salt=True,
-    simu_type="conductivity",
     simu_temp=430,
     simu_length=100,
     md_save_time=12500,
@@ -55,15 +51,10 @@ def run(
     """
     # don't forget to export the path to your packmol in the bashrc
     packmol_path = os.environ["packmol"]
-    if not ffnet_path:
-        ffnet_path = f"{os.path.expanduser('~')}/ForceFieldNet"
-    if not htvs_path:
-        htvs_path = f"{os.path.expanduser('~')}/htvs"
+    if not hitpoly_path:
+        hitpoly_path = f"{os.path.expanduser('~')}/HiTPoly"
 
-    htvs_details = {}
-    # htvs_details["geom_config_name"] = "nvt_conf_generation_ligpargen_lammps"
-    salt_smiles = True
-    if salt_smiles:
+    if salt_type:
         salt_smiles, salt_paths, salt_data_paths, ani_name_rdf = salt_string_to_values(ffnet_path, salt_type)
         salt = True
     else:
@@ -71,6 +62,7 @@ def run(
         salt_paths = []
         salt_data_paths = []
         salt_smiles = []
+        ani_name_rdf = None
 
     with open(f"{save_path}/repeats.txt", "w") as f:
         f.write(str(repeats))
@@ -99,7 +91,7 @@ def run(
         repeats=ligpargen_repeats,
         add_end_Cs=add_end_Cs,
         ligpargen_path=ligpargen_path,
-        ffnet_path=ffnet_path,
+        hitpoly_path=hitpoly_path,
         reaction=reaction,
         product_index=product_index,
         platform=platform,
@@ -133,8 +125,6 @@ def run(
             param_dict=param_dict,
             lit_charges_save_path=lit_charges_save_path,
             charges=charges,
-            htvs_path=htvs_path,
-            htvs_details=htvs_details,
         )
     ## to here
 
@@ -154,8 +144,6 @@ def run(
         lit_charges_save_path=lit_charges_save_path,
         charges=charges,
         charge_scale=charge_scale,
-        htvs_path=htvs_path,
-        htvs_details=htvs_details,
         salt_smiles=salt_smiles,
         salt_paths=salt_paths,
         salt_data_paths=salt_data_paths,
@@ -253,8 +241,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-f",
-        "--ffnet_path",
-        help="Path towards the ForceFieldNet folder",
+        "--hitpoly_path",
+        help="Path towards the HiTPoly folder",
         default="None",
     )
     parser.add_argument(
@@ -305,8 +293,8 @@ if __name__ == "__main__":
     else:
         add_end_Cs = True
 
-    if args.ffnet_path == "None":
-        args.ffnet_path = None
+    if args.hitpoly_path == "None":
+        args.hitpoly_path = None
     if args.enforce_generation == "False":
         args.enforce_generation = False
     else:
@@ -328,7 +316,7 @@ if __name__ == "__main__":
         salt_type=args.salt_type,
         charges=args.charge_type,
         add_end_Cs=add_end_Cs,
-        ffnet_path=args.ffnet_path,
+        hitpoly_path=args.hitpoly_path,
         reaction=args.reaction,
         product_index=int(args.product_index),
         box_multiplier=float(args.box_multiplier),

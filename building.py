@@ -6,7 +6,7 @@ import sys
 sys.setrecursionlimit(5000)
 
 results_path = (
-    f"{os.path.expanduser('~')}/HiTPoly/results/GEN1_LPG_COND_T415_REP3_250110"
+    f"{os.path.expanduser('~')}/HiTPoly/results/LPG_COND_T415"
 )
 final_path = results_path
 
@@ -53,8 +53,8 @@ for ind, (row, val) in enumerate(df.iterrows()):
             command.append("--temperature")
             command.append(f"{val['temperature']}")
         # if val["salt_in_simu"] == "False":
-        # command.append("--salt")
-        # command.append("False")
+        # command.append("--salt_type")
+        # command.append("None")
         command = " ".join(command)
         print(f"RUNNING {command}")
         os.system(command)
