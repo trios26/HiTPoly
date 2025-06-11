@@ -51,9 +51,9 @@ class GromacsWriter:
             file.append(f"{'title':<23}= {self.name}")
         file.append(f"{'integrator':<23}= md-vv")
         file.append(
-            f"{'nsteps':<23}= {int(float(simulation_time / timestep) * 1000000)}"
+            f"{'nsteps':<23}= {int(float(simulation_time/timestep)*1000000)}"
         )  # in ns
-        file.append(f"{'dt':<23}= {timestep / 1000}")  # fs - ps
+        file.append(f"{'dt':<23}= {timestep/1000}")  # fs - ps
         if not initial:
             file.append(f"{'constraints':<23}= h-bonds")
             file.append(f"{'constraint-algorithm':<23}= lincs")
@@ -89,10 +89,8 @@ class GromacsWriter:
             file = self.generic_props_writer(simulation_time, self.timestep)
         file.append(f"{'nstlog':<23}= {energy_output}")
         if prod:
-            file.append(f"{'nstxout':<23}= {int(xyz_output * 1000 / self.timestep)}")
-            file.append(
-                f"{'nstvout':<23}= {int(velocity_output * 1000 / self.timestep)}"
-            )
+            file.append(f"{'nstxout':<23}= {int(xyz_output*1000/self.timestep)}")
+            file.append(f"{'nstvout':<23}= {int(velocity_output*1000/self.timestep)}")
         # Thermostat
         if prod:
             file.append(f"{'tcoupl':<23}= nose-hoover")
@@ -120,8 +118,8 @@ class GromacsWriter:
     ):
         file = self.generic_props_writer(simulation_time, self.timestep)
         file.append(f"{'nstlog':<23}= {energy_output}")
-        file.append(f"{'nstxout':<23}= {int(xyz_output * 1000 / self.timestep)}")
-        file.append(f"{'nstvout':<23}= {int(velocity_output * 1000 / self.timestep)}")
+        file.append(f"{'nstxout':<23}= {int(xyz_output*1000/self.timestep)}")
+        file.append(f"{'nstvout':<23}= {int(velocity_output*1000/self.timestep)}")
         # Thermostat
         file.append(f"{'tcoupl':<23}= nose-hoover")
         file.append(f"{'tc-grps':<23}= System")
@@ -283,11 +281,11 @@ class GromacsWriter:
                     f.write("source /home/gridsan/$USER/.bashrc" + "\n")
                     f.write("source activate htvs" + "\n")
                     f.write("\n")
-                    f.write("export hitpoly=$HOME/HiTPoly" + "\n")
+                    f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
                     f.write(f"export DATA_PATH={self.save_path}" + "\n")
                     f.write(f"export NAME={image_name}" + "\n")
                     f.write(
-                        f"python $hitpoly/run_analysis.py -p $DATA_PATH -d {int(prod_run_time / 2 * 3 / 4)}"
+                        f"python $FFNet/run_analysis.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
                     )
                     f.write(
                         f" -n $NAME -f {self.xyz_output} -temp {simu_temperature} --gromacs --platform {platform}"
@@ -361,11 +359,11 @@ class GromacsWriter:
                     f.write("source activate htvs" + "\n")
                     f.write("module load gcc" + "\n")
                     f.write("\n")
-                    f.write("export hitpoly=$HOME/HiTPoly" + "\n")
+                    f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
                     f.write(f"export DATA_PATH={self.save_path}" + "\n")
                     f.write(f"export NAME={image_name}" + "\n")
                     f.write(
-                        f"python $hitpoly/run_analysis.py -p $DATA_PATH -d {int(prod_run_time / 2 * 3 / 4)}"
+                        f"python $FFNet/run_analysis.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
                     )
                     f.write(
                         f" -n $NAME -f {self.xyz_output} -temp {simu_temperature} --gromacs --platform {platform}"
@@ -453,10 +451,10 @@ class GromacsWriter:
                     f.write("\n")
                 f.write("\n")
                 if analysis:
-                    f.write("export hitpoly=$HOME/HiTPoly" + "\n")
+                    f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
                     f.write(f"export NAME={image_name}" + "\n")
                     f.write(
-                        f"python $hitpoly/run_analysis.py -p $hitpoly/{self.overall_save_path} -d {int(prod_run_time / 2 * 3 / 4)}"
+                        f"python $FFNet/run_analysis.py -p $FFNet/{self.overall_save_path} -d {int(prod_run_time/2*3/4)}"
                     )
                     f.write(
                         f" -n $NAME -f {self.xyz_output} -temp {simu_temperature} --gromacs"

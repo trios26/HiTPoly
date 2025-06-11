@@ -391,6 +391,7 @@ def get_molecule_population_matrix(
     xyz,
     cell,
     atom_names,
+    atom_names_list,
     cutoff=3.25,
 ):
     """
@@ -408,22 +409,24 @@ def get_molecule_population_matrix(
             anion amounts
     """
     xyz_msd = wrap_xyz(xyz, cell)
+    salt_types = [i[1] for i in atom_names_list]
+    salt_atoms = [i[0] for i in atom_names_list]
     atom_inxs = [
-        cur.split("-")[1] in ["AN1", "CA1"] and cur.split("-")[0] in ["N", "Li"]
+        cur.split("-")[1] in salt_types and cur.split("-")[0] in salt_atoms
         # cur.split("-")[1] in ["PL1", "CA1"] and cur.split("-")[0] in ["N", "Li"]
         for cur in atom_names
     ]
 
-    cations = [cur.split("-")[1] == "CA1" for cur in np.array(atom_names)[atom_inxs]]
+    cations = [cur.split("-")[1] == salt_types[0] for cur in np.array(atom_names)[atom_inxs]]
     cations = np.nonzero(cations)[0]
-    orig_cations = [cur.split("-")[1] == "CA1" for cur in np.array(atom_names)]
+    orig_cations = [cur.split("-")[1] == salt_types[0] for cur in np.array(atom_names)]
     orig_cations = np.nonzero(orig_cations)[0]
 
-    an1 = [cur.split("-")[1] == "AN1" for cur in np.array(atom_names)[atom_inxs]]
+    an1 = [cur.split("-")[1] == salt_types[1] for cur in np.array(atom_names)[atom_inxs]]
     # an1 = [cur.split("-")[1] == "PL1" for cur in np.array(atom_names)[atom_inxs]]
     an1 = np.nonzero(an1)[0]
     orig_an1 = [
-        cur.split("-")[1] == "AN1" and cur.split("-")[0] == "N"
+        cur.split("-")[1] == salt_types[1] and cur.split("-")[0] == salt_atoms[1]
         # cur.split("-")[1] == "PL1" and cur.split("-")[0] == "N"
         for cur in np.array(atom_names)
     ]
@@ -633,6 +636,51 @@ def get_coords_PDB_rdf_openmm(
     print(f"RDF frames have been saved at {folder}")
 
 
+def get_coords_PDB_rdf_full_openmm(
+    folder,
+):
+    atom_names = []
+    frames = 0
+    with open(f"{folder}/xyz_unwrapped_rdf_all.txt", "w") as outfile:
+        with open(f"{folder}/simu_output.pdb", "r") as f:
+            exclude_tags = ["TER", "ENDMDL", "TITLE", "REMARK", "CRYST1", "MODEL"]
+            for ind, line in enumerate(f):
+                if 'CONECT' in line:
+                    break
+                if "MODEL" in line:
+                    frames += 1
+                    continue
+
+                if not any(ext in line for ext in exclude_tags):
+                    values = line.split()
+                    try:
+                        x = float(line[30:38])
+                        y = float(line[38:46])
+                        z = float(line[46:54])
+                        outfile.write(f"{x},{y},{z}\n")
+                    except:
+                        print('current line number and line:', ind)
+                        print(line)
+                        print(values)
+                        raise ValueError('could not convert string to float:', line[30:38])
+                    if frames < 2:
+                        # Harcoding CA1 as the only cation
+                        if values[3] == "CA1":
+                            atom_names.append(
+                                "Li" + f",{line[17:20]},{line[23:26].strip()}"
+                            )
+                        else:
+                            atom_names.append(
+                                values[-1] + f",{line[17:20]},{line[23:26].strip()}"
+                            )
+    with open(f"{folder}/atom_names_rdf_all.txt", "w") as f:
+        for i in atom_names:
+            f.write(f"{i}\n")
+    print(
+        f"{frames} PDB frames have been saved at {folder} for xyz_unwrapped_rdf_all.txt"
+    )
+
+
 def get_coords_PDB_msd(
     folder,
     pre_folder,
@@ -759,9 +807,7 @@ def get_coords_PDB_msd(
         for i in atom_names:
             f.write(f"{i}\n")
     with open(f"{folder}/frame_count.txt", "w") as f:
-        f.write(
-            f"{frames - 1}"
-        )  # This frames-1 might be completely unnecessary actually
+        f.write(f"{frames-1}")  # This frames-1 might be completely unnecessary actually
 
     simu_time = (frames - 1) * save_interval / 1000
     print(
@@ -769,8 +815,7 @@ def get_coords_PDB_msd(
     )
     return frames - 1, simu_time
 
-
-# this isn't functional yet, kyujong also needs to confirm that analysis is valid for taking the frame in our intervals
+#this isn't functional yet, kyujong also needs to confirm that analysis is valid for taking the frame in our intervals
 def get_coords_PDB_coordinating_atoms(
     folder,
     atom_name_list,
@@ -779,11 +824,36 @@ def get_coords_PDB_coordinating_atoms(
     atom_names = []
     frames = 0
 
+    COMS = []
+    cur_frame = []
+    prev_frame = []
+    masses = []
+
     with open(f"{folder}/simu_output.pdb", "r") as f:
         poly_ind = 0
         for ind, line in enumerate(f):
+            if "MODEL" in line:
+                if prev_frame:
+                    prev_frame = np.array(prev_frame)
+                    cur_frame = np.array(cur_frame)
+                    cur_frame = unwrap(cur_frame, prev_frame, cell)
+                    masses = np.array(masses)
+                    total_mass = np.sum(masses)
+                    COMS.append(np.sum(cur_frame.T * masses, axis=1) / total_mass)
+                    cur_frame = cur_frame.tolist()
+                if frames == 1:
+                    cur_frame = np.array(cur_frame)
+                    masses = np.array(masses)
+                    total_mass = np.sum(masses)
+                    COMS.append(np.sum(cur_frame.T * masses, axis=1) / total_mass)
+                    cur_frame = cur_frame.tolist()
+
+                prev_frame = cur_frame
+                cur_frame = []
+                frames += 1
+
             for atom, mol in atom_name_list:
-                if mol in line and mol != "PL1":
+                if mol in line and mol != "PL1": #cation and anion
                     values = line.split()
                     if atom.lower() == values[-1].lower() or values[3] == "CA1":
                         x = float(line[30:38])
@@ -796,20 +866,51 @@ def get_coords_PDB_coordinating_atoms(
                                 atom_names.append(atom + f",{mol}")
                             else:
                                 atom_names.append(values[-1] + f",{mol}")
-                if mol == "PL1" and mol in line:
+                if mol == "PL1" and mol in line: #polymers
                     values = line.split()
                     if values[-1].lower() in ["o", "s", "n", "si", "br"]:
-                        x = float(line[30:38])
-                        y = float(line[38:46])
-                        z = float(line[46:54])
-                        xyz.append(np.array([x, y, z], dtype=np.float32))
-                        if frames < 2:
-                            atom_names.append(values[-1] + f",{mol}")
+                        
+                            x = float(line[30:38])
+                            y = float(line[38:46])
+                            z = float(line[46:54])
+                            xyz.append(np.array([x, y, z], dtype=np.float32))
+                            if frames < 2:
+                                atom_names.append(values[-1] + f",{mol}")
                 poly_ind += 1
+            
+            if "PL1" in line or "CA1" in line or "AN1" in line:
+                values = line.split()
+                if "TER" == values[0]:
+                    continue
+                else:
+                    x = float(line[30:38])
+                    y = float(line[38:46])
+                    z = float(line[46:54])
+                    cur_frame.append(np.array([x, y, z], dtype=np.float32))
+
+                    if frames < 2:
+                        if values[3] == "CA1":
+                            masses.append(ELEMENT_TO_MASS["Li"])
+                        else:
+                            masses.append(ELEMENT_TO_MASS[values[-1]])
+
+        # Calculating the COM of the final frame
+        prev_frame = np.array(prev_frame)
+        cur_frame = np.array(cur_frame)
+        cur_frame = unwrap(cur_frame, prev_frame, cell)
+        masses = np.array(masses)
+        total_mass = np.sum(masses)
+        COMS.append(np.sum(cur_frame.T * masses, axis=1) / total_mass)
+
+    xyz = np.array(xyz)
+    xyz = xyz.reshape(len(COMS), len(atom_names), 3)
+    for ind, com in enumerate(COMS):
+        xyz[ind] = xyz[ind] - com
+    xyz = xyz.reshape(-1, 3)
 
     with open(f"{folder}/xyz_wrapped_coordinating_atoms.txt", "w") as f:
         for xyz in xyz:
-            f.write(f"{xyz[0]},{xyz[1]},{xyz[2]}\n")
+            f.write(f"{xyz[0]},{xyz[1]},{xyz[2]}\n")                       
     with open(f"{folder}/atom_names_coordinating_atoms.txt", "w") as f:
         for i in atom_names:
             f.write(f"{i}\n")
@@ -847,6 +948,8 @@ def save_gromacs_params(folder):
 
     cell = np.diag(np.array(cell.split()[1:4], dtype=np.float32))
     np.save(f"{folder}/cell_dimensions", cell)
+    with open(f"{folder}/box_len.txt", 'w') as outfile:
+        outfile.write(str(cell[0][0]))
     return cell
 
 
@@ -891,6 +994,7 @@ def plot_calc_diffu(
     name=None,
     solv_name=[],
     poly_name: list = [],
+    atom_names_list: list = [],
 ):
     """
     save_freq - ps
@@ -1307,6 +1411,7 @@ def plot_calc_diffu(
         xyz=xyz,
         cell=cell,
         atom_names=atom_names,
+        atom_names_list=atom_names_list,
         cutoff=3.25,
     )
 
@@ -1406,18 +1511,7 @@ def plot_clusters_cond(
         plt.close()
 
         # this part writes the amount of clusters with neutral, positive or negative charge
-        extended_clustermatrix = np.zeros(
-            (int(imshow_matr.shape[0]), int(imshow_matr.shape[1]))
-        )
-        for i in range(imshow_matr.shape[0]):
-            t = imshow_matr.shape[0] - 1 - i
-            for j in range(imshow_matr.shape[1]):
-                extended_clustermatrix[i][j] = imshow_matr[i][j]
-                if t > 1:
-                    extended_clustermatrix[i][j] = t * extended_clustermatrix[i][j]
-                if j > 1:
-                    extended_clustermatrix[i][j] = j * extended_clustermatrix[i][j]
-        numbers_clusters = np.sum(extended_clustermatrix)
+        numbers_clusters = np.sum(imshow_matr)
 
         freelithium_occur = 0
         neutral_occur = 0
@@ -1429,7 +1523,7 @@ def plot_clusters_cond(
             for j in range(imshow_matr.shape[1]):
                 if j == 0 and t > j:
                     freelithium_occur += imshow_matr[i][j] / numbers_clusters
-                elif t == 0 and j > j:
+                elif t == 0 and j > t:
                     freetfsi_occur += imshow_matr[i][j] / numbers_clusters
                 elif t > j:
                     positive_occur += imshow_matr[i][j] / numbers_clusters
@@ -1470,7 +1564,7 @@ def plot_clusters_cond(
 
         with open(f"{folder}/count_clusters.txt", "w") as f:
             f.write(
-                "free_lithium,positive_clusters,neutral_clusters,free_tfsi,negative_clusters\n"
+                "free_cation,positive_clusters,neutral_clusters,free_anion,negative_clusters\n"
             )
             for lit, pos, neutr, tfsi, neg in zip(
                 freelithium,
@@ -1521,34 +1615,6 @@ def plot_calc_rdf(
             for name in two_name:
                 if name == atom:
                     idxs_two.append(ind)
-        # if one_name != two_name:
-        #     backbone_o_inxs, o_inxs = [], []
-        #     for curatomnamecounter, cur in enumerate(atom_names_long_rdf[:-3]):
-        #         if (
-        #             " ".join(
-        #                 [
-        #                     atom_names_long_rdf[curatomnamecounter],
-        #                     atom_names_long_rdf[curatomnamecounter + 1],
-        #                     atom_names_long_rdf[curatomnamecounter + 2],
-        #                 ]
-        #             )
-        #             == "C-PL1 O-PL1 C-PL1"
-        #         ):
-        #             backbone_o_inxs.append(curatomnamecounter + 1)
-        #         if cur == "O-PL1":
-        #             o_inxs.append(curatomnamecounter)
-        #     backbone_o_inxs = np.array(backbone_o_inxs)
-        #     backbone_o_mask = np.array(
-        #         [cur in backbone_o_inxs for cur in range(len(atom_names_long_rdf))]
-        #     )
-        #     o_inxs = np.array(o_inxs)
-        #     pol_o_mask = np.array(
-        #         [cur in o_inxs for cur in range(len(atom_names_long_rdf))]
-        #     )
-        #     if "backbone" in two_name[0]:
-        #         idxs_two = np.where(backbone_o_mask * pol_o_mask)[0]
-        #     elif "fastB" in two_name[0]:
-        #         idxs_two = np.where((~backbone_o_mask) * pol_o_mask)[0]
 
         if len(idxs_one) == 0 or len(idxs_two) == 0:
             print(
@@ -1713,40 +1779,6 @@ def plot_calc_corr(
         num_cations = len(cat_idxs)
 
         t = np.arange(num_frames // 2) * save_freq
-        ### This is old analysis code that does time window averaging over a limited amount
-        ### of windows. It's faster, but has sliiiightly less convergence
-        # multi_origin_step = num_frames * save_freq // 1000 // 5
-        # cat_selfs, ani_selfs, catani, cat_cross, ani_cross = [], [], [], [], []
-
-        # for origin in tqdm(
-        #     np.arange(multi_origin_step, num_frames // 2, multi_origin_step)
-        # ):
-        #     start_cat = xyz[origin]
-        #     displ_vec = xyz[origin : origin + num_frames // 2] - start_cat
-
-        #     dcf = get_dcf(displ_vec)
-
-        #     ani_dcf = dcf[:, ani_idxs_list[ind]][:, :, ani_idxs_list[ind]]
-        #     cat_dcf = dcf[:, cat_idxs_list[ind]][:, :, cat_idxs_list[ind]]
-
-        #     cat_selfs.append(get_self(cat_dcf))
-        #     ani_selfs.append(get_self(ani_dcf))
-        #     # Only contains one quadrant of the cation-anion interaction
-        #     catani.append([i.sum() for i in dcf[:, :num_cations, num_cations:]])
-        #     cat_cross.append(get_cross(cat_dcf))
-        #     ani_cross.append(get_cross(ani_dcf))
-
-        # cat_selfs = np.array(cat_selfs).mean(axis=0)
-        # ani_selfs = np.array(ani_selfs).mean(axis=0)
-        # catani = np.array(catani).mean(axis=0)
-        # cat_cross = np.array(cat_cross).mean(axis=0)
-        # ani_cross = np.array(ani_cross).mean(axis=0)
-        # total_cat = cat_selfs + cat_cross
-        # total_ani = ani_selfs + ani_cross
-        ### ends here
-
-        ### This is new WN analysis code that uses FFT to calculate the correlations
-        ### over every size of a window, much slower
         displ_vec = xyz[1:] - xyz[:-1]
         corr_matrix = compute_fft_onsager(displ_vec)
         total_ani = corr_matrix[ani_idxs_list[0]][:, ani_idxs_list[0], :].transpose(
@@ -1864,7 +1896,7 @@ def plot_calc_corr(
                 catani,
                 linewidth=1,
                 color="purple",
-                label="Li-TFSI correlation",
+                label="Cat-Ani correlation",
             )
 
         axs[0].plot(
@@ -1872,28 +1904,28 @@ def plot_calc_corr(
             cat_selfs,
             linewidth=1,
             color=cat_color[ind],
-            label="Li self correlation",
+            label="Cat self correlation",
         )
         axs[0].plot(
             t / 1000.0,
             cat_cross,
             linewidth=1,
             color=cat_color[ind + 1],
-            label="Li cross correlation",
+            label="Cat cross correlation",
         )
         axs[0].plot(
             t / 1000.0,
             ani_selfs,
             linewidth=1,
             color=ani_color[ind],
-            label="WN TFSI self corr",
+            label="Ani self correlation",
         )
         axs[0].plot(
             t / 1000.0,
             ani_cross,
             linewidth=1,
             color=ani_color[ind + 1],
-            label="WN TFSI cross corr",
+            label="Ani cross correlation",
         )
 
         # For the fitting of slopes figure
@@ -1903,7 +1935,7 @@ def plot_calc_corr(
             total_cat,
             linewidth=1,
             color=cat_color[ind],
-            label="Li total corr",
+            label="Cat total correlation",
         )
         axs[1].plot(
             t / 1000.0,
@@ -1920,7 +1952,7 @@ def plot_calc_corr(
             total_cat[mask],
             linewidth=1,
             color="black",
-            label="Li LogLog slope = %1.3e" % (m_loglogs[0]),
+            label="Cat LogLog slope = %1.3e" % (m_loglogs[0]),
         )
         ### ANION
         axs[1].plot(
@@ -1928,7 +1960,7 @@ def plot_calc_corr(
             total_ani,
             linewidth=1,
             color=ani_color[ind],
-            label="TFSI total corr",
+            label="Ani total correlation",
         )
         axs[1].plot(
             t / 1000.0,
@@ -1945,7 +1977,7 @@ def plot_calc_corr(
             total_ani[mask],
             linewidth=1,
             color="black",
-            label="TFSI LogLog slope = %1.3e" % (m_loglogs[1]),
+            label="Ani LogLog slope = %1.3e" % (m_loglogs[1]),
         )
         ### CATANI
         axs[1].plot(

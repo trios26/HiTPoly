@@ -21,15 +21,9 @@ from hitpoly.utils.constants import (
     SIGMA_ATOMS,
     EPSILON_ATOMS,
     CHARGES,
-    D_CHARGES,
-    D_ALPHA,
-    D_THOLE,
-    NUM_TO_ELEMENT,
-    COUL_CONST,
 )
 from hitpoly.utils.args import hitpolyArgs
 from hitpoly.utils.geometry_calc import (
-    get_theta,
     build_bonds,
     build_angles,
     build_dihedrals,
@@ -75,9 +69,7 @@ class TopologyBuilder:
 
     def build_graph(self):
         molecule = Chem.MolFromSmiles(self.smiles[0])
-
         molecule = Chem.AddHs(molecule)
-
         neighbors = self.get_neighbors(molecule)  # molecule is now a rdkit molecule
 
         self.atomic_nums = [x.GetAtomicNum() for x in molecule.GetAtoms()]

@@ -335,12 +335,12 @@ def equilibrate_system_1(
         PDBFile.writeFile(modeller.topology, minpositions, f)
 
     print(
-        f"Small NPT (10ps) run at {int(timestep * 1000)}fs stepsize with Temperature=1 and pressure=1"
+        f"Small NPT (10ps) run at {int(timestep*1000)}fs stepsize with Temperature=1 and pressure=1"
     )
     npt_run(
         integrator,
         simulation,
-        simu_time=10000,
+        simu_time=20000,
         temperature=1,
         pressure=1,
         barostat=barostat,
@@ -349,12 +349,12 @@ def equilibrate_system_1(
     simulation.minimizeEnergy()
 
     print(
-        f"Small (100ps) npt ramp at {int(timestep * 1000)}fs stepsize at Temperature=50 and pressure ramp from 1 to 100"
+        f"Small (100ps) npt ramp at {int(timestep*1000)}fs stepsize at Temperature=50 and pressure ramp from 1 to 100"
     )
     npt_pressure_change(
         integrator,
         simulation,
-        ramp_time=100000,
+        ramp_time=500000,
         temperature=50,
         barostat=barostat,
         pressure_start=1,
@@ -449,7 +449,7 @@ def equilibrate_system_2(
     #     pressure_end=4000,
     #     pressure_step=40,
     # )
-    print(f"Low pressure NPT hold at 1 bar, {simu_temp + 70} K")
+    print(f"Low pressure NPT hold at 1 bar, {simu_temp+70} K")
     npt_run(
         integrator,
         simulation,
@@ -468,7 +468,7 @@ def equilibrate_system_2(
     #     pressure_end=simu_pressure,
     #     pressure_step=-40,
     # )
-    print(f"High pressure NPT hold at 100 bar, {simu_temp + 70} K")
+    print(f"High pressure NPT hold at 100 bar, {simu_temp+70} K")
     npt_run(
         integrator,
         simulation,
@@ -488,7 +488,7 @@ def equilibrate_system_2(
     #     pressure_end=4000,
     #     pressure_step=40,
     # )
-    print(f"Low pressure NPT hold at 1 bar, {simu_temp + 20} K")
+    print(f"Low pressure NPT hold at 1 bar, {simu_temp+20} K")
     npt_run(
         integrator,
         simulation,
@@ -507,7 +507,7 @@ def equilibrate_system_2(
     #     pressure_end=simu_pressure,
     #     pressure_step=-40,
     # )
-    print(f"High pressure NPT hold at 100 bar, {simu_temp + 20}K")
+    print(f"High pressure NPT hold at 100 bar, {simu_temp+20}K")
     npt_run(
         integrator,
         simulation,
@@ -525,7 +525,7 @@ def equilibrate_system_2(
         pressure=1,
         barostat=barostat,
     )
-    print(f"Low pressure NPT run at 1 bar, {simu_temp + 20} K")
+    print(f"Low pressure NPT run at 1 bar, {simu_temp+20} K")
     npt_run(
         integrator,
         simulation,
@@ -543,7 +543,7 @@ def equilibrate_system_2(
         pressure=1,
         barostat=barostat,
     )
-    print(f"Low pressure NPT run at 1 bar, {simu_temp + 20} K")
+    print(f"Low pressure NPT run at 1 bar, {simu_temp+20} K")
     npt_run(
         integrator,
         simulation,
@@ -561,7 +561,7 @@ def equilibrate_system_2(
         pressure=1,
         barostat=barostat,
     )
-    print(f"Low pressure NPT run at 1 bar, {simu_temp + 20} K")
+    print(f"Low pressure NPT run at 1 bar, {simu_temp+20} K")
     npt_run(
         integrator,
         simulation,
@@ -619,6 +619,120 @@ def equilibrate_system_2(
 
     return integrator, simulation
 
+
+# has 2fs timestep
+def equilibrate_system_liquid(
+    save_path,
+    final_save_path,
+    barostat_type=None,
+    simu_temp=393,
+    simu_pressure=1,
+    logperiod=5000,
+    mdOutputTime=5000,
+    cuda_device="0",
+    timestep=0.002,
+    fraction_froze=None,
+):
+    """
+    For liquids, we do not need to use high pressure equilibration. So simply run NPT at 1 bar for sufficient time.
+    """
+    integrator, barostat, barostat_id, simulation, system, modeller = (
+        iniatilize_simulation(
+            save_path=save_path,
+            final_save_path=final_save_path,
+            temperature=simu_temp,
+            pressure=simu_pressure,
+            cuda_device=cuda_device,
+            equilibration=True,
+            barostat=True,
+            timestep=timestep,
+            barostat_type=barostat_type,
+        )
+    )
+
+    simulation.reporters.append(
+        StateDataReporter(
+            f"{final_save_path}/equilibration_2.log",
+            logperiod,
+            step=True,
+            time=True,
+            potentialEnergy=True,
+            kineticEnergy=True,
+            totalEnergy=True,
+            temperature=True,
+            progress=True,
+            volume=True,
+            density=True,
+            speed=True,
+            totalSteps=5000000,
+            separator="\t",
+        )
+    )
+
+    simulation.reporters.append(
+        PDBReporter(f"{final_save_path}/equilibration_2.pdb", mdOutputTime)
+    )
+    simulation.reporters.append(
+        StateDataReporter(
+            stdout,
+            mdOutputTime,
+            step=True,
+            potentialEnergy=True,
+            temperature=True,
+            speed=True,
+            density=True,
+        )
+    )
+    print(f"Low pressure NPT hold at 1 bar, {simu_temp+70} K")
+    npt_run(
+        integrator,
+        simulation,
+        simu_time=500000,
+        temperature=simu_temp + 270,
+        pressure=1,
+        barostat=barostat,
+    )
+
+    print(f"Low pressure NPT hold at 1 bar, {simu_temp+20} K")
+    npt_run(
+        integrator,
+        simulation,
+        simu_time=1000000,
+        temperature=simu_temp + 120,
+        pressure=1,
+        barostat=barostat,
+    )
+
+    print(f"Low pressure NPT run at 1 bar, {simu_temp} K")
+    npt_run(
+        integrator,
+        simulation,
+        simu_time=5000000,
+        temperature=simu_temp,
+        pressure=1,
+        barostat=barostat,
+    )
+
+    simulation.reporters.clear()
+    print("Equilibration has finished, saving equilibartion final state!")
+
+    equil_state = simulation.context.getState(
+        getPositions=True,
+        getVelocities=True,
+    )
+    equil_state_file = f"{final_save_path}/equilibrated_state.xml"
+    with open(equil_state_file, "w") as f:
+        f.write(XmlSerializer.serialize(equil_state))
+
+    minpositions = simulation.context.getState(getPositions=True).getPositions()
+    modeller.topology.setPeriodicBoxVectors(equil_state.getPeriodicBoxVectors())
+    print(
+        f"Post minimization box dimension along the X axis: {equil_state.getPeriodicBoxVectors()[0]._value}"
+    )
+    with open(f"{save_path}/packed_box.pdb", "w") as f:
+        PDBFile.writeFile(modeller.topology, minpositions, f)
+
+    return integrator, simulation
 
 def equilibrate_system_IR(
     save_path,
@@ -715,7 +829,7 @@ def equilibrate_system_IR(
         pressure_end=simu_pressure,
         pressure_step=-40,
     )
-    print(f"NPT temperature ramp from {simu_temp} to {simu_temp + 200} bar")
+    print(f"NPT temperature ramp from {simu_temp} to {simu_temp+200} bar")
     npt_temperature_change(
         integrator,
         simulation,
@@ -724,7 +838,7 @@ def equilibrate_system_IR(
         temp_end=simu_temp + 200,
         temp_step=10,
     )
-    print(f"NPT temperature ramp from {simu_temp + 200} to {simu_temp} bar")
+    print(f"NPT temperature ramp from {simu_temp+200} to {simu_temp} bar")
     npt_temperature_change(
         integrator,
         simulation,
@@ -863,7 +977,7 @@ def prod_run_nvt(
         )
 
         final_state_file = (
-            f"{save_path}/final_state_{int((i + 1) * (simu_steps / 1000000) // 4)}.xml"
+            f"{save_path}/final_state_{int((i+1)*(simu_steps/1000000)//4)}.xml"
         )
 
         with open(final_state_file, "w") as f:
@@ -871,7 +985,7 @@ def prod_run_nvt(
 
         if i > 0:
             prev_state_file = (
-                f"{save_path}/final_state_{int(i * (simu_steps / 1000000) // 4)}.xml"
+                f"{save_path}/final_state_{int(i*(simu_steps/1000000)//4)}.xml"
             )
             os.remove(prev_state_file)
 
@@ -888,10 +1002,13 @@ def write_analysis_script(
     save_path,
     results_path,
     repeat_units,
+    cation,
+    anion,
     platform,
     simu_temperature,
     prod_run_time,
     xyz_output=25,  # ps
+    ani_name_rdf=None,
 ):
     if platform == "supercloud":
         with open(f"{results_path}/run_analysis.sh", "w") as f:
@@ -901,15 +1018,15 @@ def write_analysis_script(
             f.write("source /home/gridsan/$USER/.bashrc" + "\n")
             f.write("source activate htvs" + "\n")
             f.write("\n")
-            f.write("export hitpoly=$HOME/HiTPoly" + "\n")
+            f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
             f.write(f"export DATA_PATH={results_path}" + "\n")
             f.write(f"export NAME=T{simu_temperature}" + "\n")
             f.write(
-                f"python $hitpoly/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time / 2 * 3 / 4)}"
+                f"python $FFNet/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
             )
             f.write(
                 f" --repeat_units {repeat_units} -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
-                + "\n"
+                + f" --cat {cation} --ani {anion} --ani_rdf {ani_name_rdf} \n"
             )
 
     elif platform == "engaging":
@@ -920,13 +1037,13 @@ def write_analysis_script(
             f.write("source /home/$USER/.bashrc" + "\n")
             f.write("source activate htvs" + "\n")
             f.write("\n")
-            f.write("export hitpoly=$HOME/HiTPoly" + "\n")
+            f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
             f.write(f"export DATA_PATH={results_path}" + "\n")
             f.write(f"export NAME=T{simu_temperature}" + "\n")
             f.write(
-                f"python $hitpoly/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time / 2 * 3 / 4)}"
+                f"python $FFNet/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
             )
             f.write(
                 f" -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
-                + "\n"
+                + f" --cat {cation} --ani {anion} --ani_rdf {ani_name_rdf} \n"
             )

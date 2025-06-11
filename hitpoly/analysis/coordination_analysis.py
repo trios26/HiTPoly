@@ -61,6 +61,8 @@ def get_coord_environment_convex(Li_index, s, return_dist=False):
         Element("Cl"),
         Element("S"),
         Element("Si"),
+        Element("F"),
+        Element("P"),
     ]
     # find atoms that don't coordinate to Li (carbons and F/S from TFSI)
     nlist_non_H_O = [i for i in nlist if i.specie not in anion_elements]
