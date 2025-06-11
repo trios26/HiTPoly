@@ -13,10 +13,6 @@ def get_b(xyz, bonds):
     return b
 
 
-def get_drude_b(xyz, drude_bonds):
-    b = (xyz[:, drude_bonds[:, 1]] - xyz[:, drude_bonds[:, 0]]).pow(2).sum(-1).pow(0.5)
-    return b
-
 
 def get_theta(xyz, angles):
     angle_vec1 = xyz[:, angles[:, 0]] - xyz[:, angles[:, 1]]
@@ -100,17 +96,6 @@ def get_db(xyz, bonds):
     r = xyz[:, bonds]
     I = torch.eye(2).to(device)
     b = b.view(-1, bonds.shape[0], 1).unsqueeze(-1)
-    rb = r[:, :, [1]] - r[:, :, [0]]
-    db = rb * (I[1] - I[0]).view(1, 2, 1) / b
-    return db
-
-
-def get_drude_db(xyz, drude_bonds):
-    b = get_drude_b(xyz, drude_bonds)
-    device = drude_bonds.device
-    r = xyz[:, drude_bonds]
-    I = torch.eye(2).to(device)
-    b = b.view(-1, drude_bonds.shape[0], 1).unsqueeze(-1)
     rb = r[:, :, [1]] - r[:, :, [0]]
     db = rb * (I[1] - I[0]).view(1, 2, 1) / b
     return db
@@ -330,10 +315,6 @@ def get_bond_derivatives(xyz, bonds):
     db = get_db(xyz, bonds)
     return db
 
-
-def get_drude_bond_derivatives(xyz, drude_bonds):
-    db = get_drude_db(xyz, drude_bonds)
-    return db
 
 
 def get_angle_derivatives(xyz, angles):
