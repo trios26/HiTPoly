@@ -281,11 +281,11 @@ class GromacsWriter:
                     f.write("source /home/gridsan/$USER/.bashrc" + "\n")
                     f.write("source activate htvs" + "\n")
                     f.write("\n")
-                    f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
+                    f.write("export HiTPoly=$HOME/HiTPoly" + "\n")
                     f.write(f"export DATA_PATH={self.save_path}" + "\n")
                     f.write(f"export NAME={image_name}" + "\n")
                     f.write(
-                        f"python $FFNet/run_analysis.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
+                        f"python $HiTPoly/run_analysis.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
                     )
                     f.write(
                         f" -n $NAME -f {self.xyz_output} -temp {simu_temperature} --gromacs --platform {platform}"
@@ -359,11 +359,11 @@ class GromacsWriter:
                     f.write("source activate htvs" + "\n")
                     f.write("module load gcc" + "\n")
                     f.write("\n")
-                    f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
+                    f.write("export HiTPoly=$HOME/HiTPoly" + "\n")
                     f.write(f"export DATA_PATH={self.save_path}" + "\n")
                     f.write(f"export NAME={image_name}" + "\n")
                     f.write(
-                        f"python $FFNet/run_analysis.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
+                        f"python $HiTPoly/run_analysis.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
                     )
                     f.write(
                         f" -n $NAME -f {self.xyz_output} -temp {simu_temperature} --gromacs --platform {platform}"
@@ -451,10 +451,10 @@ class GromacsWriter:
                     f.write("\n")
                 f.write("\n")
                 if analysis:
-                    f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
+                    f.write("export HiTPoly=$HOME/HiTPoly" + "\n")
                     f.write(f"export NAME={image_name}" + "\n")
                     f.write(
-                        f"python $FFNet/run_analysis.py -p $FFNet/{self.overall_save_path} -d {int(prod_run_time/2*3/4)}"
+                        f"python $HiTPoly/run_analysis.py -p $HiTPoly/{self.overall_save_path} -d {int(prod_run_time/2*3/4)}"
                     )
                     f.write(
                         f" -n $NAME -f {self.xyz_output} -temp {simu_temperature} --gromacs"

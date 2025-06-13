@@ -14,10 +14,10 @@ dependencies = [
     "scipy",
     "torch",
     "rdkit",
-    "openmm",
     "matplotlib",
     "typing-extensions",
     "typed-argument-parser",
+    "scikit-learn",
 ]
 
 [tool.setuptools]

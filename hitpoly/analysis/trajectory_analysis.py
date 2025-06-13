@@ -409,8 +409,8 @@ def get_molecule_population_matrix(
             anion amounts
     """
     xyz_msd = wrap_xyz(xyz, cell)
-    salt_types = [i[1] for i in atom_names_list]
-    salt_atoms = [i[0] for i in atom_names_list]
+    salt_types = [i[1] for i in atom_names_list if not 'PL' in i[1]]
+    salt_atoms = [i[0] for i in atom_names_list if not 'PL' in i[1]]
     atom_inxs = [
         cur.split("-")[1] in salt_types and cur.split("-")[0] in salt_atoms
         # cur.split("-")[1] in ["PL1", "CA1"] and cur.split("-")[0] in ["N", "Li"]
@@ -1312,8 +1312,7 @@ def plot_calc_diffu(
     ax.set_xlabel("$t$ / ns", fontsize=labelsize)
     ax.set_ylabel("MSD($t$) / \AA$^2$", fontsize=labelsize)
     if not name:
-        name = "_".join(folder.split("/")[-3].split("_")[:6])
-        title_name = f"{name}, T{int(temperature)}"
+        title_name = f"T{int(temperature)}"
     else:
         title_name = f"{name}, T{int(temperature)}"
     ax.set_title(f"{title_name}", fontsize=titelsize)
@@ -1498,9 +1497,8 @@ def plot_clusters_cond(
         ax.set_yticks(np.arange(max_amount + 1))
         ax.set_yticklabels(np.arange(max_amount + 1)[::-1])
         ax.tick_params(axis="both", labelsize=int(2 * labelsize / 3))
-        plot_name = "_".join(folder.split("/")[-3].split("_")[:6])
         ax.set_title(
-            f"Cluster pop at {name} of simu, {plot_name}, T={temperature}",
+            f"Cluster pop at {name} of simu, T={temperature}",
             fontsize=int(2 * labelsize / 3),
         )
         plt.tight_layout()
@@ -1675,8 +1673,7 @@ def plot_calc_rdf(
         axs.set_ylim([0, gr.max() * 1.1])
 
         if not plot_names:
-            temp_name = "_".join(folder.split("/")[-3].split("_")[:6])
-            title_name = f"{temp_name}, T{int(temperature)}, {names[i]}"
+            title_name = f"T{int(temperature)}, {names[i]}"
         else:
             title_name = f"{plot_names[i]}, T{int(temperature)}, {names[i]}"
         axs.set_title(f"{title_name}", fontsize=titelsize)
@@ -2035,8 +2032,7 @@ def plot_calc_corr(
         )
 
         if not name:
-            name = folder.split("/")[-1]
-            title_name = f"{name}, T{int(temperature)}"
+            title_name = f"T{int(temperature)}"
         else:
             title_name = f"{name}, T{int(temperature)}"
         fig.suptitle(f"{title_name}", fontsize=titelsize)

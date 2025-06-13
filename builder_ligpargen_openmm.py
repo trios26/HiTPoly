@@ -55,7 +55,7 @@ def run(
         hitpoly_path = f"{os.path.expanduser('~')}/HiTPoly"
 
     if salt_type:
-        salt_smiles, salt_paths, salt_data_paths, ani_name_rdf = salt_string_to_values(ffnet_path, salt_type)
+        salt_smiles, salt_paths, salt_data_paths, ani_name_rdf = salt_string_to_values(hitpoly_path, salt_type)
         salt = True
     else:
         salt = False
@@ -186,7 +186,7 @@ def run(
         platform=platform,
         repeat_units=repeats,
         cation=salt_type.split(".")[0],
-        anion=salt_type.split(".")[1],
+        anion=ani_name_rdf.split(",")[0],
         simu_temperature=simu_temp,
         prod_run_time=simu_length,
         ani_name_rdf=ani_name_rdf,
@@ -206,13 +206,23 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s",
         "--smiles_path",
-        help="Smiles of the polymer to be created, of the form [Cu]*[Au]",
+        help="Either the path to a file that contains the smiles string of the polymer, or the smiles string itself. Has to be of the form [Cu]*[Au]",
     )
     parser.add_argument(
         "-pc",
         "--polymer_count",
         help="How many polymer chains or molecules to be packed",
         default="30",
+    )
+    parser.add_argument(
+        "--repeats",
+        help="How many repeat units in the final polymer chain",
+        default="50",
+    )
+    parser.add_argument(
+        "--ligpargen_repeats",
+        help="How many repeat units in the initial polymer chain to be parametrized (max of 200 atoms)",
+        default="3",
     )
     parser.add_argument(
         "--salt_type",
@@ -260,8 +270,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-box",
         "--box_multiplier",
-        help="PBC box size multiplier for packmol, poylmers 1, other molecules 4-10",
-        default="1",
+        help="PBC box size multiplier for packmol, poylmers <1, other molecules (solvents) 4-10",
+        default="0.3",
     )
     parser.add_argument(
         "-conf",
@@ -269,12 +279,7 @@ if __name__ == "__main__":
         help="Whether to force rdkit to create a conformation",
         default="False",
     )
-    parser.add_argument(
-        "--simu_type",
-        help="What type of simulation to perform, options [conductivity, tg]}",
-        default="conductivity",
-    )
-    parser.add_argument("--temperature", help="Simulation temperature", default="430")
+    parser.add_argument("--temperature", help="Simulation temperature", default="415")
     parser.add_argument("--simu_length", help="Simulation length, ns", default="100")
     parser.add_argument(
         "--md_save_time", help="Simulation length, ns", default="12500"
@@ -302,9 +307,12 @@ if __name__ == "__main__":
     if args.salt_type == "None":
         args.salt_type = None
 
-    with open(args.smiles_path, "r") as f:
-        lines = f.readlines()
-        smiles = lines[0]
+    if os.path.isfile(args.smiles_path):
+        with open(args.smiles_path, "r") as f:
+            lines = f.readlines()
+            smiles = lines[0]
+    else:
+        smiles = args.smiles_path
 
     run(
         save_path=args.save_path,
@@ -313,6 +321,8 @@ if __name__ == "__main__":
         charge_scale=float(args.charge_scale),
         polymer_count=int(args.polymer_count),
         concentration=[int(args.concentration), int(args.concentration)],
+        repeats=int(args.repeats),
+        ligpargen_repeats=int(args.ligpargen_repeats),
         salt_type=args.salt_type,
         charges=args.charge_type,
         add_end_Cs=add_end_Cs,
@@ -321,7 +331,6 @@ if __name__ == "__main__":
         product_index=int(args.product_index),
         box_multiplier=float(args.box_multiplier),
         enforce_generation=args.enforce_generation,
-        simu_type=args.simu_type,
         simu_temp=int(args.temperature),
         simu_length=int(args.simu_length),
         md_save_time=int(args.md_save_time),

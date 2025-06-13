@@ -46,7 +46,7 @@ def get_structure_list(atom_names_rdf, xyz_rdf, box_dim, res_id, cubic_box=True)
     return structure_list
 
 
-def get_coord_environment_convex(Li_index, s, return_dist=False):
+def get_coord_environment_convex(Li_index, s, return_dist=False, ani_name_rdf=None):
     """ANION
     Li_index : index of Li in the pymatgen structure object
     structure : pymatgen structure object
@@ -55,15 +55,10 @@ def get_coord_environment_convex(Li_index, s, return_dist=False):
     site = s[Li_index]
     nlist = s.get_neighbors(site, 6)
     nlist.sort(key=lambda x: x.nn_distance)
-    anion_elements = [
-        Element("O"),
-        Element("N"),
-        Element("Cl"),
-        Element("S"),
-        Element("Si"),
-        Element("F"),
-        Element("P"),
-    ]
+    anion_elements = []
+    for ani in ani_name_rdf:
+        anion_elements.append(Element(ani))
+        
     # find atoms that don't coordinate to Li (carbons and F/S from TFSI)
     nlist_non_H_O = [i for i in nlist if i.specie not in anion_elements]
     nlist_new = []

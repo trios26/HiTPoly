@@ -26,6 +26,7 @@ def run(
     folder,
     cat_name: list,
     ani_name: list,
+    ani_name_rdf: list,
     simu_time,
     diffu_calc_start_time,
     save_freq,
@@ -123,13 +124,10 @@ def run(
         name=name,
     )
 
-    one_name = ["Li-CA1"]
-
+    one_name = [f"{cat_name[0]}-CA1"]
     two_names = [
         [
             "O-PL1",
-            "O-AN1",
-            "N-AN1",
             "S-PL1",
             "N-PL1",
             "Br-PL1",
@@ -137,11 +135,13 @@ def run(
             "Si-PL1",
         ],
         ["O-PL1"],
-        ["S-PL1", "N-PL1", "Br-PL1", "P-PL1", "Si-PL1"],
-        ["O-AN1"],
-        ["N-AN1"],
+        ["S-PL1", "N-PL1", "Br-PL1", "P-PL1", "Si-PL1"]
     ]
-    names = ["solv_all", "O_poly", "others_poly", "O_tfsi", "N_tfsi"]
+    names = ["solv_all", "O_poly", "others_poly"]
+    for i in ani_name_rdf:
+        two_names.append([f"{i}-AN1"])
+        two_names[0].append(f"{i}-AN1")
+        names.append(f"{i}_ani")
 
     for frame in ["beginning", "end"]:
         xyz_rdf, atom_names_rdf, atom_names_long_rdf, residue_ids = read_xyz(
@@ -179,7 +179,7 @@ def run(
                 for j, (nlist, dist) in enumerate(
                     (
                         get_coord_environment_convex(
-                            li_idx, structurelist[i], return_dist=True
+                            li_idx, structurelist[i], return_dist=True, ani_name_rdf=ani_name_rdf
                         )
                         for li_idx in structurelist[i].indices_from_symbol("Li")
                     )
@@ -231,6 +231,12 @@ if __name__ == "__main__":
         help="Name of the anion atom, can input comma separated list, example N,N for two N containing anions",
     )
     parser.add_argument(
+        "-a_rdf",
+        "--ani_rdf",
+        default="N,O",
+        help="Name of the anion atom for RDF analysis, can input comma separated list, example N,O for two atoms to analyze",
+    )
+    parser.add_argument(
         "--poly",
         default="O",
         help="Name of the polymer atom, can input comma separated list, example O,O for two O containing polymers",
@@ -278,6 +284,7 @@ if __name__ == "__main__":
         args.repeat_units = int(args.repeat_units)
     cat_name = args.cat.split(",")
     ani_name = args.ani.split(",")
+    ani_name_rdf = args.ani_rdf.split(",")
     start_time = time.time()
     run(
         folder=args.folder,

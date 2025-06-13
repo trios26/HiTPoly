@@ -192,7 +192,7 @@ def create_ligpargen(
     )
     if platform == "local":
         os.chdir(ligpargen_path)
-        command = f"LigParGen -m poly.mol -o 0 -c 0 -r PLY -d . -l"
+        command = f"$LigParGen -m poly.mol -o 0 -c 0 -r PLY -d . -l"
         subprocess.run(command, shell=True)
         os.chdir(hitpoly_path)
     elif platform == "supercloud":

@@ -43,7 +43,7 @@ def run(
         lit_charges_save_path = f"/home/{os.getlogin()}/HiTPoly/data/forcefield_files"
 
     if salt_type:
-        salt_smiles, salt_paths, salt_data_paths, ani_name_rdf = salt_string_to_values(ffnet_path, salt_type)
+        salt_smiles, salt_paths, salt_data_paths, ani_name_rdf = salt_string_to_values(hitpoly_path, salt_type)
         salt = True
     else:
         salt = False

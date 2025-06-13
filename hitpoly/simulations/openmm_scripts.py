@@ -1018,11 +1018,11 @@ def write_analysis_script(
             f.write("source /home/gridsan/$USER/.bashrc" + "\n")
             f.write("source activate htvs" + "\n")
             f.write("\n")
-            f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
+            f.write("export HiTPoly=$HOME/HiTPoly" + "\n")
             f.write(f"export DATA_PATH={results_path}" + "\n")
             f.write(f"export NAME=T{simu_temperature}" + "\n")
             f.write(
-                f"python $FFNet/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
+                f"python $HiTPoly/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
             )
             f.write(
                 f" --repeat_units {repeat_units} -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
@@ -1037,11 +1037,11 @@ def write_analysis_script(
             f.write("source /home/$USER/.bashrc" + "\n")
             f.write("source activate htvs" + "\n")
             f.write("\n")
-            f.write("export FFNet=$HOME/ForceFieldNet" + "\n")
+            f.write("export HiTPoly=$HOME/HiTPoly" + "\n")
             f.write(f"export DATA_PATH={results_path}" + "\n")
             f.write(f"export NAME=T{simu_temperature}" + "\n")
             f.write(
-                f"python $FFNet/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
+                f"python $HiTPoly/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
             )
             f.write(
                 f" -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
