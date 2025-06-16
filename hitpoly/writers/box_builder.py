@@ -1852,7 +1852,7 @@ def create_box_and_ff_files_openmm(
         salt=salt,
     )
 
-    # run_packmol(save_path, packmol_path)
+    run_packmol(save_path, packmol_path)
 
     print(f"Making all the force field files for simulations")
     train_dataset = load_hitpoly_params(
@@ -1872,7 +1872,6 @@ def create_box_and_ff_files_openmm(
         lit_charges_save_path=lit_charges_save_path,
         charges=charges,
     )
-    breakpoint()
 
     mol_dict, pdb_file = load_pdb_create_mol_dict(save_path, train_dataset)
 
