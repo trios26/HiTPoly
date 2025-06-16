@@ -45,7 +45,18 @@ def calculate_box_numbers(
     return long_smiles
 
 
-def salt_string_to_values(hitpoly_path, salt_string):
+def salt_string_to_values(hitpoly_path, salt_string, concentration):
+    """
+    Convert salt string to salt smiles, paths, data paths, and anion name for RDF analysis.
+    Also define the concentration based on the salt identity, ex, if Li is the cation then the anion is the same 
+    amount as the cation, if Zn is the cation then the anion is 1/2 the amount of the cation.
+
+    To use divalent anions, the code has to be modified to use the correct concentration.
+
+    Args:
+        hitpoly_path (str): Path to hitpoly data directory.
+        salt_string (str): String representing the salt, e.g. "Li.TFSI".
+    """
 
     cation = salt_string.split(".")[0]
     anion = salt_string.split(".")[1]
@@ -60,6 +71,7 @@ def salt_string_to_values(hitpoly_path, salt_string):
         salt_data_paths = [
             f"{hitpoly_path}/data/forcefield_files/lammps_Na_q100.data",
         ]
+        concentration = [concentration, concentration]
     elif cation == "Li":
         salt_smiles = ["[Li+]"]
         salt_paths = [
@@ -68,6 +80,16 @@ def salt_string_to_values(hitpoly_path, salt_string):
         salt_data_paths = [
             f"{hitpoly_path}/data/forcefield_files/lammps_Li_q100.data",
         ]
+        concentration = [concentration, concentration]
+    elif cation == "Zn":
+        salt_smiles = ["[Zn++]"]
+        salt_paths = [
+            f"{salt_path}/geometry_file_Zn.pdb",
+        ]
+        salt_data_paths = [
+            f"{hitpoly_path}/data/forcefield_files/lammps_Zn_q100.data",
+        ]
+        concentration = [concentration, concentration*2]
     else:
         raise ValueError(f"Cation {cation} not supported")
     
@@ -89,4 +111,4 @@ def salt_string_to_values(hitpoly_path, salt_string):
     else:
         raise ValueError(f"Anion {anion} not supported")
 
-    return salt_smiles, salt_paths, salt_data_paths, ani_name_rdf
+    return salt_smiles, salt_paths, salt_data_paths, ani_name_rdf, concentration

@@ -299,7 +299,6 @@ def create_conformer_pdb(
     if not name:
         name = Chem.MolToInchiKey(Chem.MolFromSmiles(smiles))
 
-    file_name = f"{name}.pdb"
 
     mol = Chem.MolFromSmiles(smiles)
     mol = Chem.AddHs(mol, addCoords=True)
@@ -311,11 +310,11 @@ def create_conformer_pdb(
     while not conf:
         pybel_mol = pybel.readstring("smi", smiles)
         pybel_mol.make3D(steps=opt_steps)
-        pybel_mol.write("pdb", f"{path_to_save}/{file_name}", overwrite=True)
+        pybel_mol.write("pdb", f"{path_to_save}/{name}", overwrite=True)
         try:
             print(f"Attempting to generate pybel conf with {opt_steps} steps")
             temp_mol = Chem.MolFromPDBFile(
-                f"{path_to_save}/{file_name}", removeHs=False
+                f"{path_to_save}/{name}", removeHs=False
             )
             # checking minimal distance between atoms
             X = temp_mol.GetConformer(0).GetPositions()
@@ -341,7 +340,7 @@ def create_conformer_pdb(
 
                     conformation.SetAtomPosition(i, Point3D(x, y, z))
 
-                writer = Chem.PDBWriter(f"{path_to_save}/{file_name}")
+                writer = Chem.PDBWriter(f"{path_to_save}/{name}")
                 writer.write(mol, confId=mol.GetConformer().GetId())
                 writer.close()
                 print(
@@ -356,11 +355,11 @@ def create_conformer_pdb(
         if opt_steps == 10 and not conf:
             print("Attempting to generate conf with rdkit 2D geom generation")
             initial_confs = Chem.rdDepictor.Compute2DCoords(mol)
-            writer = Chem.PDBWriter(f"{path_to_save}/{file_name}")
+            writer = Chem.PDBWriter(f"{path_to_save}/{name}")
             writer.write(mol, confId=mol.GetConformer().GetId())
             writer.close()
             temp_mol = Chem.MolFromPDBFile(
-                f"{path_to_save}/{file_name}", removeHs=False
+                f"{path_to_save}/{name}", removeHs=False
             )
             # checking minimal distance between atoms
             try:
@@ -406,7 +405,7 @@ def create_conformer_pdb(
                             move_dist += 0.1
 
             bfs(visited, neigh_dict, 0, move_dist)
-            writer = Chem.PDBWriter(f"{path_to_save}/{file_name}")
+            writer = Chem.PDBWriter(f"{path_to_save}/{name}")
             writer.write(mol, confId=mol.GetConformer().GetId())
             writer.close()
             print(
@@ -414,7 +413,7 @@ def create_conformer_pdb(
             )
             conf = True
 
-    return file_name, mol, minimize
+    return minimize
 
 
 def create_packmol_input_file(
@@ -423,7 +422,7 @@ def create_packmol_input_file(
     output_path: str,
     output_name: str,
     salt_smiles: list = None,
-    polymer_count: float = 25,
+    polymer_count: list = [25],
     salt_concentrations: list = [100, 100],
     tolerance: float = 10.0,
     box_multiplier: int = 2,
@@ -452,7 +451,7 @@ def create_packmol_input_file(
         # The volume of a polymer chain + anion, cation
         single_vol += 4 / 3 * np.pi * radius**3
 
-    total_vol = single_vol * polymer_count * box_multiplier
+    total_vol = single_vol * sum(polymer_count) * box_multiplier
     box_radi = np.power(3 / (4 * np.pi) * total_vol, 1 / 3)
 
     # If more than one anion, cation, create sublists
@@ -498,9 +497,9 @@ def create_packmol_input_file(
         f.write(f"filetype pdb\n")
         f.write(f"output {output_name}\n")
         f.write(f"seed {random_seed}\n\n")
-        for i in poly_paths:
+        for ind, i in enumerate(poly_paths):
             f.write(f"structure {i}\n")
-            f.write(f"  number {polymer_count}\n")
+            f.write(f"  number {polymer_count[ind]}\n")
             f.write(f"  inside box 0 0 0 {box_radi} {box_radi} {box_radi}\n")
             f.write(f"end structure\n\n")
         for ind, i in enumerate(anion_paths):
@@ -536,7 +535,6 @@ def load_hitpoly_params(
     salt_smiles: list,
     salt_data_paths: list = [],
     charge_scale: float = None,
-    poly_count: int = 1,
 ):
     smiles = poly_smiles + salt_smiles
     train_args = hitpolyArgs()
@@ -550,7 +548,7 @@ def load_hitpoly_params(
 
     train_dataset = TopologyDataset(data=train_molecule_data)
 
-    for i, name in zip(train_dataset[poly_count:], salt_data_paths):
+    for i, name in zip(train_dataset[len(poly_smiles):], salt_data_paths):
         ff_read = ForceFieldFileReader(
             i,
             name,
@@ -787,7 +785,6 @@ def generate_parameter_dict(save_path, atom_names, atoms, bonds_typed):
     return param_dict
 
 def assign_lpg_params(
-    short_smiles,
     atoms_long,
     atom_names_long,
     atoms_short,
@@ -797,242 +794,242 @@ def assign_lpg_params(
     lit_charges_save_path,
     charges,
 ):
-    test_atoms = [NUM_TO_ELEMENT[i] for i in train_dataset[0].atomic_nums]
-    assert test_atoms == atoms_long
-    print(
-        "Atoms same between Topology builder (hitpoly) and atom types (ligpargen) atoms"
-    )
+    for ind_dataset in range(len(param_dict)):
+        test_atoms = [NUM_TO_ELEMENT[i] for i in train_dataset[ind_dataset].atomic_nums]
+        assert test_atoms == atoms_long[ind_dataset]
+        print(
+            "Atoms same between Topology builder (hitpoly) and atom types (ligpargen) atoms"
+        )
 
-    for ind, i in enumerate(train_dataset[0].pair_params):
-        for key, val in param_dict["atoms"].items():
-            if val["other_type"] == atom_names_long[ind]:
-                pairs = [val["charge"], val["epsilon"], val["sigma"]]
-                train_dataset[0].pair_params[ind] = torch.tensor(pairs)
-                break
+        for ind, i in enumerate(train_dataset[ind_dataset].pair_params):
+            for key, val in param_dict[ind_dataset]["atoms"].items():
+                if val["other_type"] == atom_names_long[ind_dataset][ind]:
+                    pairs = [val["charge"], val["epsilon"], val["sigma"]]
+                    train_dataset[ind_dataset].pair_params[ind] = torch.tensor(pairs)
+                    break
 
-    if charges == "LPG":
-        charge_dict_temp = {}
-        for key, val in param_dict["atoms"].items():
-            if val["other_type"] not in charge_dict_temp.keys():
-                charge_dict_temp[val["other_type"]] = []
-                charge_dict_temp[val["other_type"]].append(val["charge"])
-            else:
-                charge_dict_temp[val["other_type"]].append(val["charge"])
+        if charges == "LPG":
+            charge_dict_temp = {}
+            for key, val in param_dict[ind_dataset]["atoms"].items():
+                if val["other_type"] not in charge_dict_temp.keys():
+                    charge_dict_temp[val["other_type"]] = []
+                    charge_dict_temp[val["other_type"]].append(val["charge"])
+                else:
+                    charge_dict_temp[val["other_type"]].append(val["charge"])
 
-        charges_dict = {}
-        for key, val in charge_dict_temp.items():
-            charges_dict[key] = np.array(val).mean()
-    elif charges == "LIT":
-        charges_list = []
-        with open(f"{lit_charges_save_path}/LIT_charges/PEO.csv", "r") as f:
-            lines = f.readlines()
-            try:
-                for i, a in zip(lines, atoms_short):
-                    if i.split(",")[1] == a:
-                        charges_list.append(float(i.split(",")[0]))
-            except:
-                # If the charges file starts with a description
-                for i, a in zip(lines[1:], atoms_short):
-                    if i.split(",")[1] == a:
-                        charges_list.append(float(i.split(",")[0]))
-        assert len(charges_list) == len(atoms_short)
+            charges_dict = {}
+            for key, val in charge_dict_temp.items():
+                charges_dict[key] = np.array(val).mean()
+        elif charges == "LIT":
+            charges_list = []
+            with open(f"{lit_charges_save_path}/LIT_charges/PEO.csv", "r") as f:
+                lines = f.readlines()
+                try:
+                    for i, a in zip(lines, atoms_short[ind_dataset]):
+                        if i.split(",")[1] == a:
+                            charges_list.append(float(i.split(",")[0]))
+                except:
+                    # If the charges file starts with a description
+                    for i, a in zip(lines[1:], atoms_short[ind_dataset]):
+                        if i.split(",")[1] == a:
+                            charges_list.append(float(i.split(",")[0]))
+            assert len(charges_list) == len(atoms_short[ind_dataset])
 
-        df = pd.DataFrame({"charge": charges_list, "names": atom_names_short})
+            df = pd.DataFrame({"charge": charges_list, "names": atom_names_short[ind_dataset]})
 
-        charges_dict = {}
-        for i in df.groupby("names", as_index=False).mean().to_dict("records"):
-            charges_dict[i["names"]] = i["charge"]
-    else:
-        raise ValueError(f"Wrong charge name {charges}")
+            charges_dict = {}
+            for i in df.groupby("names", as_index=False).mean().to_dict("records"):
+                charges_dict[i["names"]] = i["charge"]
+        else:
+            raise ValueError(f"Wrong charge name {charges}")
 
-    for ind, i in enumerate(train_dataset[0].pair_params):
-        train_dataset[0].pair_params[ind, 0] = charges_dict[atom_names_long[ind]]
+        for ind, i in enumerate(train_dataset[ind_dataset].pair_params):
+            train_dataset[ind_dataset].pair_params[ind, 0] = charges_dict[atom_names_long[ind_dataset][ind]]
 
-    mean = train_dataset[0].pair_params[:, 0].mean()
-    smallest_charge = train_dataset[0].pair_params[:, 0].abs().min()
-    sum_char = train_dataset[0].pair_params[:, 0].sum()
-    print(
-        f"Mean of the charges {mean:.4}, sum of the charges {sum_char}, and smallest charge {smallest_charge}"
-    )
-    if train_dataset[0].pair_params[:, 0].sum().abs() * 50 > 1e-3:
-        charges_all = train_dataset[0].pair_params[:, 0]
-        pol_pos = charges_all[charges_all > 0].sum()
-        pol_neg = charges_all[charges_all < 0].sum()
-        pol_sc = torch.mean(torch.tensor((pol_pos, torch.abs(pol_neg))))
-        charges_all[charges_all > 0] = (charges_all[charges_all > 0] / pol_pos) * pol_sc
-        charges_all[charges_all < 0] = (
-            charges_all[charges_all < 0] / torch.abs(pol_neg)
-        ) * pol_sc
-        train_dataset[0].pair_params[:, 0] = charges_all
-        mean = train_dataset[0].pair_params[:, 0].mean()
-        smallest_charge = train_dataset[0].pair_params[:, 0].abs().min()
-        sum_char = train_dataset[0].pair_params[:, 0].sum()
-        print("Charges have been rescaled")
+        mean = train_dataset[ind_dataset].pair_params[:, 0].mean()
+        smallest_charge = train_dataset[ind_dataset].pair_params[:, 0].abs().min()
+        sum_char = train_dataset[ind_dataset].pair_params[:, 0].sum()
         print(
             f"Mean of the charges {mean:.4}, sum of the charges {sum_char}, and smallest charge {smallest_charge}"
         )
-    if train_dataset[0].pair_params[:, 0].sum().abs() * 10 > 1e-3:
-        raise ValueError("CHARGES HAVE NOT BEEN PROPERLY RESCALAED")
+        if train_dataset[ind_dataset].pair_params[:, 0].sum().abs() * 50 > 1e-3:
+            charges_all = train_dataset[ind_dataset].pair_params[:, 0]
+            pol_pos = charges_all[charges_all > 0].sum()
+            pol_neg = charges_all[charges_all < 0].sum()
+            pol_sc = torch.mean(torch.tensor((pol_pos, torch.abs(pol_neg))))
+            charges_all[charges_all > 0] = (charges_all[charges_all > 0] / pol_pos) * pol_sc
+            charges_all[charges_all < 0] = (
+                charges_all[charges_all < 0] / torch.abs(pol_neg)
+            ) * pol_sc
+            train_dataset[ind_dataset].pair_params[:, 0] = charges_all
+            mean = train_dataset[ind_dataset].pair_params[:, 0].mean()
+            smallest_charge = train_dataset[ind_dataset].pair_params[:, 0].abs().min()
+            sum_char = train_dataset[ind_dataset].pair_params[:, 0].sum()
+            print("Charges have been rescaled")
+            print(
+                f"Mean of the charges {mean:.4}, sum of the charges {sum_char}, and smallest charge {smallest_charge}"
+            )
+        if train_dataset[ind_dataset].pair_params[:, 0].sum().abs() * 10 > 1e-3:
+            raise ValueError("CHARGES HAVE NOT BEEN PROPERLY RESCALAED")
 
-    # Sometimes not all bonds are assinged, this creates a bond dict fromt the unique atom
-    #  types, based on the charges
-    charge_bonds = {}
-    for key, val in param_dict["bonds"].items():
-        charge_bonds[
-            ",".join([str(round(charges_dict[c], 3)) for c in val["other_idx"]])
-        ] = [val["k"], val["length"]]
+        # Sometimes not all bonds are assinged, this creates a bond dict fromt the unique atom
+        #  types, based on the charges
+        charge_bonds = {}
+        for key, val in param_dict[ind_dataset]["bonds"].items():
+            charge_bonds[
+                ",".join([str(round(charges_dict[c], 3)) for c in val["other_idx"]])
+            ] = [val["k"], val["length"]]
 
-    bonds_added = 0
-    for ind, i in enumerate(train_dataset[0].bonds):
-        bonds_temp = [atom_names_long[i[0]], atom_names_long[i[1]]]
-        bond_added = False
-        for key, val in param_dict["bonds"].items():
-            if set(val["other_idx"]) == set(bonds_temp):
-                bond_p = [val["k"], val["length"]]
-                train_dataset[0].bond_params[ind] = torch.tensor(bond_p)
-                bond_added = True
+        bonds_added = 0
+        for ind, i in enumerate(train_dataset[ind_dataset].bonds):
+            bonds_temp = [atom_names_long[ind_dataset][i[0]], atom_names_long[ind_dataset][i[1]]]
+            bond_added = False
+            for key, val in param_dict[ind_dataset]["bonds"].items():
+                if set(val["other_idx"]) == set(bonds_temp):
+                    bond_p = [val["k"], val["length"]]
+                    train_dataset[ind_dataset].bond_params[ind] = torch.tensor(bond_p)
+                    bond_added = True
+                    bonds_added += 1
+                    break
+            if not bond_added:
+                charge_temp1 = ",".join(
+                    [str(round(charges_dict[c], 3)) for c in bonds_temp]
+                )
+                charge_temp2 = ",".join(
+                    [str(round(charges_dict[c], 3)) for c in bonds_temp[::-1]]
+                )
+                if charge_temp1 in charge_bonds.keys():
+                    bond_p = charge_bonds[charge_temp1]
+                elif charge_temp2 in charge_bonds.keys():
+                    bond_p = charge_bonds[charge_temp2]
+                train_dataset[ind_dataset].bond_params[ind] = torch.tensor(bond_p)
                 bonds_added += 1
-                break
-        if not bond_added:
-            charge_temp1 = ",".join(
-                [str(round(charges_dict[c], 3)) for c in bonds_temp]
-            )
-            charge_temp2 = ",".join(
-                [str(round(charges_dict[c], 3)) for c in bonds_temp[::-1]]
-            )
-            if charge_temp1 in charge_bonds.keys():
-                bond_p = charge_bonds[charge_temp1]
-            elif charge_temp2 in charge_bonds.keys():
-                bond_p = charge_bonds[charge_temp2]
-            train_dataset[0].bond_params[ind] = torch.tensor(bond_p)
-            bonds_added += 1
 
-    # Check if there are the same amount of angles parametrized
-    #  as there are angles created
-    assert len(train_dataset[0].bonds) == bonds_added
+        # Check if there are the same amount of angles parametrized
+        #  as there are angles created
+        assert len(train_dataset[ind_dataset].bonds) == bonds_added
 
-    # Sometimes not all angles are assinged, this creates a angle dict fromt the unique atom
-    #  types, based on the charges
-    charge_angles = {}
-    for key, val in param_dict["angles"].items():
-        charge_angles[
-            ",".join([str(round(charges_dict[c], 3)) for c in val["other_idx"]])
-        ] = [val["k"], val["angle"]]
+        # Sometimes not all angles are assinged, this creates a angle dict fromt the unique atom
+        #  types, based on the charges
+        charge_angles = {}
+        for key, val in param_dict[ind_dataset]["angles"].items():
+            charge_angles[
+                ",".join([str(round(charges_dict[c], 3)) for c in val["other_idx"]])
+            ] = [val["k"], val["angle"]]
 
-    angles_added = 0
-    for ind, i in enumerate(train_dataset[0].angles):
-        angles_temp = [
-            atom_names_long[i[0]],
-            atom_names_long[i[1]],
-            atom_names_long[i[2]],
-        ]
-        angle_added = False
-        for key, val in param_dict["angles"].items():
-            if val["other_idx"] == angles_temp or val["other_idx"] == angles_temp[::-1]:
-                angles_p = [val["k"], val["angle"]]
-                train_dataset[0].angle_params[ind] = torch.tensor(angles_p)
-                angle_added = True
+        angles_added = 0
+        for ind, i in enumerate(train_dataset[ind_dataset].angles):
+            angles_temp = [
+                atom_names_long[ind_dataset][i[0]],
+                atom_names_long[ind_dataset][i[1]],
+                atom_names_long[ind_dataset][i[2]],
+            ]
+            angle_added = False
+            for key, val in param_dict[ind_dataset]["angles"].items():
+                if val["other_idx"] == angles_temp or val["other_idx"] == angles_temp[::-1]:
+                    angles_p = [val["k"], val["angle"]]
+                    train_dataset[ind_dataset].angle_params[ind] = torch.tensor(angles_p)
+                    angle_added = True
+                    angles_added += 1
+                    break
+            if not angle_added:
+                charge_temp1 = ",".join(
+                    [str(round(charges_dict[c], 3)) for c in angles_temp]
+                )
+                charge_temp2 = ",".join(
+                    [str(round(charges_dict[c], 3)) for c in angles_temp[::-1]]
+                )
+                if charge_temp1 in charge_angles.keys():
+                    angles_p = charge_angles[charge_temp1]
+                elif charge_temp2 in charge_angles.keys():
+                    angles_p = charge_angles[charge_temp2]
+                train_dataset[ind_dataset].angle_params[ind] = torch.tensor(angles_p)
                 angles_added += 1
-                break
-        if not angle_added:
-            charge_temp1 = ",".join(
-                [str(round(charges_dict[c], 3)) for c in angles_temp]
-            )
-            charge_temp2 = ",".join(
-                [str(round(charges_dict[c], 3)) for c in angles_temp[::-1]]
-            )
-            if charge_temp1 in charge_angles.keys():
-                angles_p = charge_angles[charge_temp1]
-            elif charge_temp2 in charge_angles.keys():
-                angles_p = charge_angles[charge_temp2]
-            train_dataset[0].angle_params[ind] = torch.tensor(angles_p)
-            angles_added += 1
 
-    # Check if there are the same amount of angles parametrized
-    #  as there are angles created
-    assert len(train_dataset[0].angles) == angles_added
+        # Check if there are the same amount of angles parametrized
+        #  as there are angles created
+        assert len(train_dataset[ind_dataset].angles) == angles_added
 
-    # Sometimes not all dihedrals are assinged, this creates a dihedral dict fromt the unique atom
-    #  types, based on the charges
-    charge_dihs = {}
-    for key, val in param_dict["dihedrals"].items():
-        charge_dihs[
-            ",".join([str(round(charges_dict[c], 3)) for c in val["other_idx"]])
-        ] = val["k"]
+        # Sometimes not all dihedrals are assinged, this creates a dihedral dict fromt the unique atom
+        #  types, based on the charges
+        charge_dihs = {}
+        for key, val in param_dict[ind_dataset]["dihedrals"].items():
+            charge_dihs[
+                ",".join([str(round(charges_dict[c], 3)) for c in val["other_idx"]])
+            ] = val["k"]
 
-    dihedrals_added = 0
-    for ind, i in enumerate(train_dataset[0].dihedrals):
-        dihedrals_temp = [
-            atom_names_long[i[0]],
-            atom_names_long[i[1]],
-            atom_names_long[i[2]],
-            atom_names_long[i[3]],
-        ]
-        dih_added = False
-        for key, val in param_dict["dihedrals"].items():
-            if (
-                val["other_idx"] == dihedrals_temp
-                or val["other_idx"] == dihedrals_temp[::-1]
-            ):
-                dihedral_p = val["k"]
-                train_dataset[0].dihedral_params[ind] = torch.tensor(dihedral_p)
-                dih_added = True
+        dihedrals_added = 0
+        for ind, i in enumerate(train_dataset[ind_dataset].dihedrals):
+            dihedrals_temp = [
+                atom_names_long[ind_dataset][i[0]],
+                atom_names_long[ind_dataset][i[1]],
+                atom_names_long[ind_dataset][i[2]],
+                atom_names_long[ind_dataset][i[3]],
+            ]
+            dih_added = False
+            for key, val in param_dict[ind_dataset]["dihedrals"].items():
+                if (
+                    val["other_idx"] == dihedrals_temp
+                    or val["other_idx"] == dihedrals_temp[::-1]
+                ):
+                    dihedral_p = val["k"]
+                    train_dataset[ind_dataset].dihedral_params[ind] = torch.tensor(dihedral_p)
+                    dih_added = True
+                    dihedrals_added += 1
+                    break
+            if not dih_added:
+                charge_temp1 = ",".join(
+                    [str(round(charges_dict[c], 3)) for c in dihedrals_temp]
+                )
+                charge_temp2 = ",".join(
+                    [str(round(charges_dict[c], 3)) for c in dihedrals_temp[::-1]]
+                )
+                if charge_temp1 in charge_dihs.keys():
+                    dihedral_p = charge_dihs[charge_temp1]
+                elif charge_temp2 in charge_dihs.keys():
+                    dihedral_p = charge_dihs[charge_temp2]
+                train_dataset[ind_dataset].dihedral_params[ind] = torch.tensor(dihedral_p)
                 dihedrals_added += 1
-                break
-        if not dih_added:
-            charge_temp1 = ",".join(
-                [str(round(charges_dict[c], 3)) for c in dihedrals_temp]
-            )
-            charge_temp2 = ",".join(
-                [str(round(charges_dict[c], 3)) for c in dihedrals_temp[::-1]]
-            )
-            if charge_temp1 in charge_dihs.keys():
-                dihedral_p = charge_dihs[charge_temp1]
-            elif charge_temp2 in charge_dihs.keys():
-                dihedral_p = charge_dihs[charge_temp2]
-            train_dataset[0].dihedral_params[ind] = torch.tensor(dihedral_p)
-            dihedrals_added += 1
 
-    # Check if there are the same amount of dihedrals parametrized
-    #  as there are dihedrals created
-    assert len(train_dataset[0].dihedrals) == dihedrals_added
+        # Check if there are the same amount of dihedrals parametrized
+        #  as there are dihedrals created
+        assert len(train_dataset[ind_dataset].dihedrals) == dihedrals_added
 
-    # There are usually less imporpers created in ligpargen than
-    #  there are actual impropers, so everything that is not assigned
-    #  is going to be deleted
-    improp_indeces = []
-    for ind, i in enumerate(train_dataset[0].impropers):
-        impropers_temp = [
-            atom_names_long[i[0]],
-            atom_names_long[i[1]],
-            atom_names_long[i[2]],
-            atom_names_long[i[3]],
-        ]
-        for key, val in param_dict["impropers"].items():
-            if (
-                val["other_idx"] == impropers_temp
-                or val["other_idx"] == impropers_temp[::-1]
-            ):
-                improper_p = val["k"]
-                train_dataset[0].improper_params[ind] = torch.tensor(improper_p)
-                improp_indeces.append(ind)
-                break
-            elif val["other_idx"][0] == impropers_temp[0]:
-                if np.isin(val["other_idx"][1:], impropers_temp[1:]).all():
+        # There are usually less imporpers created in ligpargen than
+        #  there are actual impropers, so everything that is not assigned
+        #  is going to be deleted
+        improp_indeces = []
+        for ind, i in enumerate(train_dataset[ind_dataset].impropers):
+            impropers_temp = [
+                atom_names_long[ind_dataset][i[0]],
+                atom_names_long[ind_dataset][i[1]],
+                atom_names_long[ind_dataset][i[2]],
+                atom_names_long[ind_dataset][i[3]],
+            ]
+            for key, val in param_dict[ind_dataset]["impropers"].items():
+                if (
+                    val["other_idx"] == impropers_temp
+                    or val["other_idx"] == impropers_temp[::-1]
+                ):
                     improper_p = val["k"]
-                    train_dataset[0].improper_params[ind] = torch.tensor(improper_p)
+                    train_dataset[ind_dataset].improper_params[ind] = torch.tensor(improper_p)
                     improp_indeces.append(ind)
                     break
-    # Dropping all the impropers that are not parametrized
-    train_dataset[0].impropers = train_dataset[0].impropers[improp_indeces]
-    train_dataset[0].improper_params = train_dataset[0].improper_params[improp_indeces]
+                elif val["other_idx"][0] == impropers_temp[0]:
+                    if np.isin(val["other_idx"][1:], impropers_temp[1:]).all():
+                        improper_p = val["k"]
+                        train_dataset[ind_dataset].improper_params[ind] = torch.tensor(improper_p)
+                        improp_indeces.append(ind)
+                        break
+        # Dropping all the impropers that are not parametrized
+        train_dataset[ind_dataset].impropers = train_dataset[ind_dataset].impropers[improp_indeces]
+        train_dataset[ind_dataset].improper_params = train_dataset[ind_dataset].improper_params[improp_indeces]
 
     return train_dataset
 
 
 def minimize_polymer(
     save_path,
-    short_smiles,
     long_smiles,
     atoms_long,
     atom_names_long,
@@ -1041,14 +1038,13 @@ def minimize_polymer(
     param_dict,
     lit_charges_save_path,
     charges,
-    poly_name,
+    name,
 ):
     train_dataset = load_hitpoly_params(
         [long_smiles],
         [],
     )
     train_dataset = assign_lpg_params(
-        short_smiles=short_smiles,
         atoms_long=atoms_long,
         atom_names_long=atom_names_long,
         atoms_short=atoms_short,
@@ -1057,7 +1053,6 @@ def minimize_polymer(
         param_dict=param_dict,
         lit_charges_save_path=lit_charges_save_path,
         charges=charges,
-        poly_name=poly_name,
     )
 
     mol_dict, pdb_file = load_pdb_create_mol_dict(
@@ -1080,6 +1075,7 @@ def minimize_polymer(
     print("Temp polymer force field built!")
     equilibrate_polymer(
         save_path=save_path,
+        name=name,
     )
     print(f"Polymer structure has been minimized and saved at {save_path}")
 
@@ -1770,7 +1766,6 @@ def create_box_and_ff_files(
     )
 
     train_dataset = assign_lpg_params(
-        short_smiles=short_smiles,
         atoms_long=atoms_long,
         atom_names_long=atom_names_long,
         atoms_short=atoms_short,
@@ -1819,9 +1814,8 @@ def create_box_and_ff_files(
 def create_box_and_ff_files_openmm(
     save_path,
     long_smiles,
-    short_smiles,
     filename,
-    polymer_count,
+    solvent_count,
     concentration,
     packmol_path,
     atoms_short,
@@ -1839,10 +1833,10 @@ def create_box_and_ff_files_openmm(
     salt,
 ):
     print("Creating box with OpenMM equilibration")
-    poly_paths = [f"{save_path}/{filename}"]
+    poly_paths = [f"{save_path}/{name}" for name in filename]
 
     print(
-        f"Creating and running packmol files with {polymer_count} chains and {concentration} LiTFSIs"
+        f"Creating and running packmol files with {solvent_count} chains and {concentration} LiTFSIs"
     )
     print(f"at {save_path} path")
     create_packmol_input_file(
@@ -1851,25 +1845,24 @@ def create_box_and_ff_files_openmm(
         f"{save_path}/packmol.inp",
         f"{save_path}/packed_box.pdb",
         salt_smiles=salt_smiles,
-        polymer_count=polymer_count,
+        polymer_count=solvent_count,
         salt_concentrations=concentration,
         box_multiplier=box_multiplier,  # for small bent molecule x4, for straight-ish molecules around 0.5
         tolerance=2.0,
         salt=salt,
     )
 
-    run_packmol(save_path, packmol_path)
+    # run_packmol(save_path, packmol_path)
 
     print(f"Making all the force field files for simulations")
     train_dataset = load_hitpoly_params(
-        [long_smiles],
+        long_smiles,
         salt_smiles,
         salt_data_paths=salt_data_paths,
         charge_scale=charge_scale,
     )
 
     train_dataset = assign_lpg_params(
-        short_smiles=short_smiles,
         atoms_long=atoms_long,
         atom_names_long=atom_names_long,
         atoms_short=atoms_short,
@@ -1879,6 +1872,7 @@ def create_box_and_ff_files_openmm(
         lit_charges_save_path=lit_charges_save_path,
         charges=charges,
     )
+    breakpoint()
 
     mol_dict, pdb_file = load_pdb_create_mol_dict(save_path, train_dataset)
 

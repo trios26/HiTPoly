@@ -24,11 +24,11 @@ def run(
     results_path,
     smiles,
     charge_scale=0.75,
-    polymer_count=30,
+    solvent_count=[30],
     repeats=1,
     ligpargen_repeats=1,
     salt_type="Li.TFSI",
-    concentration: list = [100, 100],
+    concentration=100,
     charges="LPG",
     add_end_Cs=True,
     hitpoly_path=None,
@@ -55,7 +55,8 @@ def run(
         hitpoly_path = f"{os.path.expanduser('~')}/HiTPoly"
 
     if salt_type:
-        salt_smiles, salt_paths, salt_data_paths, ani_name_rdf = salt_string_to_values(hitpoly_path, salt_type)
+        salt_smiles, salt_paths, salt_data_paths, ani_name_rdf, concentration = salt_string_to_values(
+            hitpoly_path, salt_type, concentration)
         salt = True
     else:
         salt = False
@@ -63,84 +64,105 @@ def run(
         salt_data_paths = []
         salt_smiles = []
         ani_name_rdf = None
+        
+    filename_list = []
+    long_smiles_list = []
+    atom_names_short_list = []
+    atom_names_long_list = []
+    atoms_short_list = []
+    atoms_long_list = []
+    param_dict_list = []
 
-    with open(f"{save_path}/repeats.txt", "w") as f:
-        f.write(str(repeats))
+    for ind, i in enumerate(smiles):
+        if len(smiles) == 1:
+            extra_name = ""
+            name = "polymer_conformation.pdb"
+            filename_list.append(name)
+        else:
+            extra_name = f"_{ind}"
+            name = f"polymer_conformation{extra_name}.pdb"
+            filename_list.append(name)
 
-    ligpargen_path = f"{save_path}/ligpargen"
-    print(f"ligpargen path: {ligpargen_path}")
-    if not os.path.isdir(ligpargen_path):
-        os.makedirs(ligpargen_path)
-    ## from here
-    long_smiles, _ = create_long_smiles(
-        smiles,
-        repeats=repeats,
-        add_end_Cs=add_end_Cs,
-        reaction=reaction,
-        product_index=product_index,
-    )
+        with open(f"{save_path}/repeats{extra_name}.txt", "w") as f:
+            f.write(str(repeats))
 
-    mol_long = Chem.MolFromSmiles(long_smiles)
-    mol_long = Chem.AddHs(mol_long)
-    r_long, atom_names_long, atoms_long, bonds_typed_long = generate_atom_types(
-        mol_long, 2
-    )
-
-    mol_initial, smiles_initial = create_ligpargen(
-        smiles=smiles,
-        repeats=ligpargen_repeats,
-        add_end_Cs=add_end_Cs,
-        ligpargen_path=ligpargen_path,
-        hitpoly_path=hitpoly_path,
-        reaction=reaction,
-        product_index=product_index,
-        platform=platform,
-    )
-
-    print(f"Created ligpargen files at {ligpargen_path}")
-
-    r, atom_names, atoms, bonds_typed = generate_atom_types(mol_initial, 2)
-
-    param_dict = generate_parameter_dict(ligpargen_path, atom_names, atoms, bonds_typed)
-
-
-    filename, mol, minimize = create_conformer_pdb(
-        save_path,
-        long_smiles,
-        name="polymer_conformation",
-        enforce_generation=enforce_generation,
-    )
-    
-    print(f"Saved conformer pdb.")
-
-    if minimize:
-        minimize_polymer(
-            short_smiles=smiles_initial,
-            save_path=save_path,
-            long_smiles=long_smiles,
-            atoms_long=atoms_long,
-            atoms_short=atoms,
-            atom_names_short=atom_names,
-            atom_names_long=atom_names_long,
-            param_dict=param_dict,
-            lit_charges_save_path=lit_charges_save_path,
-            charges=charges,
+        ligpargen_path = f"{save_path}/ligpargen{extra_name}"
+        print(f"ligpargen path: {ligpargen_path}")
+        if not os.path.isdir(ligpargen_path):
+            os.makedirs(ligpargen_path)
+        
+        long_smiles, _ = create_long_smiles(
+            i,
+            repeats=repeats,
+            add_end_Cs=add_end_Cs,
+            reaction=reaction,
+            product_index=product_index,
         )
-    ## to here
+        long_smiles_list.append(long_smiles)
+
+        mol_long = Chem.MolFromSmiles(long_smiles)
+        mol_long = Chem.AddHs(mol_long)
+        r_long, atom_names_long, atoms_long, bonds_typed_long = generate_atom_types(
+            mol_long, 2
+        )
+        atom_names_long_list.append(atom_names_long)
+        atoms_long_list.append(atoms_long)
+        
+        mol_initial, _ = create_ligpargen(
+            smiles=i,
+            repeats=ligpargen_repeats,
+            add_end_Cs=add_end_Cs,
+            ligpargen_path=ligpargen_path,
+            hitpoly_path=hitpoly_path,
+            reaction=reaction,
+            product_index=product_index,
+            platform=platform,
+        )
+
+        print(f"Created ligpargen files at {ligpargen_path}")
+
+        r, atom_names, atoms, bonds_typed = generate_atom_types(mol_initial, 2)
+        atom_names_short_list.append(atom_names)
+        atoms_short_list.append(atoms)
+
+        param_dict = generate_parameter_dict(ligpargen_path, atom_names, atoms, bonds_typed)
+        param_dict_list.append(param_dict)
+        
+        minimize = create_conformer_pdb(
+            save_path,
+            long_smiles,
+            name=name,
+            enforce_generation=enforce_generation,
+        )
+        
+        print(f"Saved conformer pdb.")
+
+        if minimize:
+            minimize_polymer(
+                save_path=save_path,
+                long_smiles=long_smiles,
+                atoms_long=atoms_long,
+                atoms_short=atoms,
+                atom_names_short=atom_names,
+                atom_names_long=atom_names_long,
+                param_dict=param_dict,
+                lit_charges_save_path=lit_charges_save_path,
+                charges=charges,
+                name=name,
+            )
 
     create_box_and_ff_files_openmm(
-        short_smiles=smiles_initial,
         save_path=save_path,
-        long_smiles=long_smiles,
-        filename=filename,
-        polymer_count=polymer_count,
+        long_smiles=long_smiles_list,
+        filename=filename_list,
         concentration=concentration,
+        solvent_count=solvent_count,
         packmol_path=packmol_path,
-        atoms_long=atoms_long,
-        atoms_short=atoms,
-        atom_names_short=atom_names,
-        atom_names_long=atom_names_long,
-        param_dict=param_dict,
+        atoms_long=atoms_long_list,
+        atoms_short=atoms_short_list,
+        atom_names_short=atom_names_short_list,
+        atom_names_long=atom_names_long_list,
+        param_dict=param_dict_list,
         lit_charges_save_path=lit_charges_save_path,
         charges=charges,
         charge_scale=charge_scale,
@@ -201,27 +223,29 @@ if __name__ == "__main__":
     parser.add_argument(
         "-pr",
         "--results_path",
-        help="Path to the where the new directory to be created",
+        help="Path to the where the new directory to be created for results",
     )
     parser.add_argument(
         "-s",
         "--smiles_path",
-        help="Either the path to a file that contains the smiles string of the polymer, or the smiles string itself. Has to be of the form [Cu]*[Au]",
+        help="Either the path to a file that contains the smiles string of the polymer (or small molecule), \
+            or the smiles string itself. Has to be of the form [Cu]*[Au] if polymer, otherwise can be \
+            a rdkit canonical smiles string. The file can contain multiple smiles strings, one per line.",
     )
     parser.add_argument(
-        "-pc",
-        "--polymer_count",
-        help="How many polymer chains or molecules to be packed",
+        "-sc",
+        "--solvent_count",
+        help="How many solvent molecules (polymer or small molecules) to be packed, can be a list of values, ex, '30,30'",
         default="30",
     )
     parser.add_argument(
         "--repeats",
-        help="How many repeat units in the final polymer chain",
+        help="How many repeat units in the final polymer chain, can be a list of values, ex, '50,45'",
         default="50",
     )
     parser.add_argument(
         "--ligpargen_repeats",
-        help="How many repeat units in the initial polymer chain to be parametrized (max of 200 atoms)",
+        help="How many repeat units in the initial polymer chain to be parametrized (max of 200 atoms), can be a list of values, ex, '3,3'",
         default="3",
     )
     parser.add_argument(
@@ -271,7 +295,7 @@ if __name__ == "__main__":
         "-box",
         "--box_multiplier",
         help="PBC box size multiplier for packmol, poylmers <1, other molecules (solvents) 4-10",
-        default="0.3",
+        default="10",
     )
     parser.add_argument(
         "-conf",
@@ -307,20 +331,25 @@ if __name__ == "__main__":
     if args.salt_type == "None":
         args.salt_type = None
 
+    smiles = []
     if os.path.isfile(args.smiles_path):
         with open(args.smiles_path, "r") as f:
             lines = f.readlines()
-            smiles = lines[0]
+            for line in lines:
+                smiles.append(line.strip())
     else:
         smiles = args.smiles_path
+
+    solvent_count = args.solvent_count.split(",")
+    solvent_count = [int(i) for i in solvent_count]
 
     run(
         save_path=args.save_path,
         results_path=args.results_path,
         smiles=smiles,
         charge_scale=float(args.charge_scale),
-        polymer_count=int(args.polymer_count),
-        concentration=[int(args.concentration), int(args.concentration)],
+        solvent_count=solvent_count,
+        concentration=int(args.concentration),
         repeats=int(args.repeats),
         ligpargen_repeats=int(args.ligpargen_repeats),
         salt_type=args.salt_type,

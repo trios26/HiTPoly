@@ -245,6 +245,7 @@ def equilibrate_polymer(
     logperiod=5000,
     mdOutputTime=5000,
     cuda_device="0",
+    name="polymer_conformation",
 ):
     integrator, barostat, barostat_id, simulation, system, modeller = (
         iniatilize_simulation(
@@ -264,7 +265,7 @@ def equilibrate_polymer(
         asNumpy=True
     )
 
-    with open(f"{save_path}/polymer_conformation.pdb", "w") as f:
+    with open(f"{save_path}/{name}.pdb", "w") as f:
         PDBFile.writeFile(modeller.topology, minpositions, f)
 
 
