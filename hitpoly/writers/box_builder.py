@@ -1060,12 +1060,21 @@ def minimize_polymer(
     )
 
     atom_dict, atom_types_list = atom_name_reindexing(mol_dict)
-    lammps_openmm_scaling = False
-    for i in mol_dict.keys():
-        mol_dict[i]["mol_hitpoly"] = param_scaling_openmm(
-            mol_dict[i]["mol_hitpoly"], lammps_openmm_scaling
-        )
-        lammps_openmm_scaling = True
+    # Apply scaling: False for first n solvents, True for remaining molecules (anions/cations)
+    mol_keys = list(mol_dict.keys())
+    n_solvents = len(long_smiles)  # number of solvent molecules
+    
+    for i, key in enumerate(mol_keys):
+        if i < n_solvents:
+            # First n keys are solvents - no scaling
+            mol_dict[key]["mol_hitpoly"] = param_scaling_openmm(
+                mol_dict[key]["mol_hitpoly"], scaling=False
+            )
+        else:
+            # Remaining keys are anions/cations - apply scaling
+            mol_dict[key]["mol_hitpoly"] = param_scaling_openmm(
+                mol_dict[key]["mol_hitpoly"], scaling=True
+            )
     ff_file, ff_file_resid, name_iterables = creating_ff_and_resid_files(
         mol_dict, atom_types_list
     )
@@ -1779,12 +1788,21 @@ def create_box_and_ff_files(
     mol_dict, pdb_file = load_pdb_create_mol_dict(save_path, train_dataset)
 
     atom_dict, atom_types_list = atom_name_reindexing(mol_dict)
-    lammps_openmm_scaling = False
-    for i in mol_dict.keys():
-        mol_dict[i]["mol_hitpoly"] = param_scaling_openmm(
-            mol_dict[i]["mol_hitpoly"], lammps_openmm_scaling
-        )
-        lammps_openmm_scaling = True
+    # Apply scaling: False for first n solvents, True for remaining molecules (anions/cations)
+    mol_keys = list(mol_dict.keys())
+    n_solvents = len(long_smiles)  # number of solvent molecules
+    
+    for i, key in enumerate(mol_keys):
+        if i < n_solvents:
+            # First n keys are solvents - no scaling
+            mol_dict[key]["mol_hitpoly"] = param_scaling_openmm(
+                mol_dict[key]["mol_hitpoly"], scaling=False
+            )
+        else:
+            # Remaining keys are anions/cations - apply scaling
+            mol_dict[key]["mol_hitpoly"] = param_scaling_openmm(
+                mol_dict[key]["mol_hitpoly"], scaling=True
+            )
     ff_file, ff_file_resid, name_iterables = creating_ff_and_resid_files(
         mol_dict, atom_types_list
     )
@@ -1876,12 +1894,21 @@ def create_box_and_ff_files_openmm(
     mol_dict, pdb_file = load_pdb_create_mol_dict(save_path, train_dataset)
 
     atom_dict, atom_types_list = atom_name_reindexing(mol_dict)
-    lammps_openmm_scaling = False
-    for i in mol_dict.keys():
-        mol_dict[i]["mol_hitpoly"] = param_scaling_openmm(
-            mol_dict[i]["mol_hitpoly"], lammps_openmm_scaling
-        )
-        lammps_openmm_scaling = True
+    # Apply scaling: False for first n solvents, True for remaining molecules (anions/cations)
+    mol_keys = list(mol_dict.keys())
+    n_solvents = len(long_smiles)  # number of solvent molecules
+    
+    for i, key in enumerate(mol_keys):
+        if i < n_solvents:
+            # First n keys are solvents - no scaling
+            mol_dict[key]["mol_hitpoly"] = param_scaling_openmm(
+                mol_dict[key]["mol_hitpoly"], scaling=False
+            )
+        else:
+            # Remaining keys are anions/cations - apply scaling
+            mol_dict[key]["mol_hitpoly"] = param_scaling_openmm(
+                mol_dict[key]["mol_hitpoly"], scaling=True
+            )
     ff_file, ff_file_resid, name_iterables = creating_ff_and_resid_files(
         mol_dict, atom_types_list
     )
