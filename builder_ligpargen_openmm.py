@@ -9,7 +9,8 @@ from hitpoly.simulations.gromacs_writer import GromacsWriter
 from hitpoly.simulations.openmm_scripts import (
     equilibrate_system_1,
     equilibrate_system_2,
-    equilibrate_system_liquid,
+    equilibrate_system_liquid1,
+    equilibrate_system_liquid2,
     prod_run_nvt,
     write_analysis_script,
 )
@@ -183,12 +184,23 @@ def run(
     )
 
     if not is_liquid:
+
+        equilibrate_system_1(
+            save_path=save_path,
+            final_save_path=final_save_path,
+        )
+
         equilibrate_system_2(
             save_path=save_path,
             final_save_path=final_save_path,
         )
     else:
-        equilibrate_system_liquid(
+        equilibrate_system_liquid1(
+            save_path=save_path,
+            final_save_path=final_save_path,
+            simu_temp=simu_temp,
+        )
+        equilibrate_system_liquid2(
             save_path=save_path,
             final_save_path=final_save_path,
             simu_temp=simu_temp,

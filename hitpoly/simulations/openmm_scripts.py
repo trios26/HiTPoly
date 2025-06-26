@@ -621,8 +621,131 @@ def equilibrate_system_2(
     return integrator, simulation
 
 
+
+def equilibrate_system_liquid1(
+    save_path,
+    final_save_path,
+    barostat_type=None,
+    simu_temp=353,
+    simu_pressure=1,
+    logperiod=5000,
+    mdOutputTime=5000,
+    cuda_device="0",
+    timestep=0.001,
+    fraction_froze=None,
+):
+    integrator, barostat, barostat_id, simulation, system, modeller = (
+        iniatilize_simulation(
+            save_path=save_path,
+            final_save_path=final_save_path,
+            temperature=10,
+            pressure=simu_pressure,
+            cuda_device=cuda_device,
+            equilibration=False,
+            timestep=timestep,
+            barostat_type=barostat_type,
+        )
+    )
+
+    simulation.reporters.append(
+        StateDataReporter(
+            f"{final_save_path}/equilibration.log",
+            logperiod,
+            step=True,
+            time=True,
+            potentialEnergy=True,
+            kineticEnergy=True,
+            totalEnergy=True,
+            temperature=True,
+            progress=True,
+            volume=True,
+            density=True,
+            speed=True,
+            totalSteps=5000000,
+            separator="\t",
+        )
+    )
+
+    simulation.reporters.append(
+        PDBReporter(f"{final_save_path}/equilibration.pdb", mdOutputTime)
+    )
+    simulation.reporters.append(
+        StateDataReporter(
+            stdout,
+            mdOutputTime,
+            step=True,
+            potentialEnergy=True,
+            temperature=True,
+            speed=True,
+            density=True,
+        )
+    )
+    print("Minimizing energy and saving inital positions")
+    for _ in range(10):
+        simulation.minimizeEnergy()
+
+    minpositions = simulation.context.getState(getPositions=True).getPositions()
+    with open(f"{save_path}/minimized_box.pdb", "w") as f:
+        PDBFile.writeFile(modeller.topology, minpositions, f)
+
+
+    print(
+        f"Small NPT (10ps) run at {int(timestep*1000)}fs stepsize with Temperature=1 and pressure=1"
+    )
+    npt_run(
+        integrator,
+        simulation,
+        simu_time=20000,
+        temperature=1,
+        pressure=1,
+        barostat=barostat,
+    )
+
+    simulation.minimizeEnergy()
+
+    print(f"NPT temperature ramp from 1 K to {simu_temp}")
+    npt_temperature_change(
+        integrator,
+        simulation,
+        ramp_time=500000,
+        temp_start=1,
+        temp_end=simu_temp,
+        temp_step=10,
+        barostat=barostat,
+    )
+    """
+    print(
+        f"Small (100ps) npt ramp at {int(timestep*1000)}fs stepsize at Temperature=50 and pressure ramp from 1 to 100"
+    )
+    npt_pressure_change(
+        integrator,
+        simulation,
+        ramp_time=500000,
+        temperature=50,
+        barostat=barostat,
+        pressure_start=1,
+        pressure_end=100,
+        pressure_step=1,
+    )
+    """
+    print("Minimizing energy and saving first equilibrated output")
+    simulation.minimizeEnergy()
+
+    equil_state = simulation.context.getState(
+        getPositions=True,
+        getVelocities=True,
+    )
+    equil_state_file = f"{final_save_path}/equilibrated_state.xml"
+    with open(equil_state_file, "w") as f:
+        f.write(XmlSerializer.serialize(equil_state))
+
+    minpositions = simulation.context.getState(getPositions=True).getPositions()
+    modeller.topology.setPeriodicBoxVectors(equil_state.getPeriodicBoxVectors())
+    with open(f"{save_path}/packed_box.pdb", "w") as f:
+        PDBFile.writeFile(modeller.topology, minpositions, f)
+
 # has 2fs timestep
-def equilibrate_system_liquid(
+def equilibrate_system_liquid2(
     save_path,
     final_save_path,
     barostat_type=None,
@@ -684,36 +807,67 @@ def equilibrate_system_liquid(
             density=True,
         )
     )
-    print(f"Low pressure NPT hold at 1 bar, {simu_temp+70} K")
-    npt_run(
-        integrator,
-        simulation,
-        simu_time=500000,
-        temperature=simu_temp + 270,
-        pressure=1,
-        barostat=barostat,
-    )
+    # print(f"NPT pressure ramp from 1 to 4000 bar and {simu_temp+70} K")
+    # npt_pressure_change(
+    #     integrator,
+    #     simulation,
+    #     ramp_time=500000,
+    #     temperature=simu_temp + 70,
+    #     pressure_start=simu_pressure,
+    #     pressure_end=4000,
+    #     pressure_step=40,
+    # )
 
-    print(f"Low pressure NPT hold at 1 bar, {simu_temp+20} K")
-    npt_run(
-        integrator,
-        simulation,
-        simu_time=1000000,
-        temperature=simu_temp + 120,
-        pressure=1,
-        barostat=barostat,
-    )
 
     print(f"Low pressure NPT run at 1 bar, {simu_temp} K")
     npt_run(
         integrator,
         simulation,
-        simu_time=5000000,
+        simu_time=2500000,
         temperature=simu_temp,
         pressure=1,
         barostat=barostat,
     )
 
+    print(f"temperature ramp from {simu_temp} to {simu_temp+50} K")
+    npt_temperature_change(
+        integrator,
+        simulation,
+        ramp_time=500000,
+        temp_start=simu_temp,
+        temp_end=simu_temp + 50,
+        temp_step=10,
+        barostat=barostat,
+    )
+    print(f"annealing at {simu_temp+50} K for 10 ns")
+    npt_run(
+        integrator,
+        simulation,
+        simu_time=2500000,
+        temperature=simu_temp + 50,
+        pressure=1,
+        barostat=barostat,
+    )
+
+    print(f"temperature quenching from {simu_temp+50} to {simu_temp} K")
+    npt_temperature_change(
+        integrator,
+        simulation,
+        ramp_time=500000,
+        temp_start=simu_temp + 50,
+        temp_end=simu_temp,
+        temp_step=-10,
+        barostat=barostat,
+    )
+    print(f"annealing at {simu_temp} K for 10 ns")
+    npt_run(
+        integrator,
+        simulation,
+        simu_time=2500000,
+        temperature=simu_temp,
+        pressure=1,
+        barostat=barostat,
+    )
     simulation.reporters.clear()
     print("Equilibration has finished, saving equilibartion final state!")
 
@@ -734,6 +888,7 @@ def equilibrate_system_liquid(
         PDBFile.writeFile(modeller.topology, minpositions, f)
 
     return integrator, simulation
+
 
 def equilibrate_system_IR(
     save_path,
