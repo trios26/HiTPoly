@@ -597,7 +597,7 @@ def perlmutter_ligpargen(ligpargen_path):
     ligpargen = os.environ.get("LigParGen")
     with open(f"{ligpargen_path}/run.sh", "w") as f:
         f.write("#!/bin/bash" + "\n")
-        f.write("#SBATCH --account=m4604" + "\n")
+        f.write("#SBATCH --account=m5068" + "\n")
         f.write("#SBATCH --qos=debug" + "\n")
         f.write("#SBATCH --constraint=cpu" + "\n")
         f.write("#SBATCH --nodes=1" + "\n")
