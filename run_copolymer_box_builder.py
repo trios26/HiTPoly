@@ -3,9 +3,9 @@ import os
 import time
 import shutil
 import uuid
-from ffnet.writers.copolymer_box_builder import *
-from ffnet.simulations.gromacs_writer import GromacsWriter
-from ffnet.simulations.openmm_scripts import (
+from hitpoly.writers.copolymer_box_builder import *
+from hitpoly.simulations.gromacs_writer import GromacsWriter
+from hitpoly.simulations.openmm_scripts import (
     equilibrate_system_1,
     equilibrate_system_2,
     prod_run_nvt,
