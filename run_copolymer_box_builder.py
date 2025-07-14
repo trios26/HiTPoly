@@ -62,7 +62,7 @@ def run(
     if final_path is None:
         final_path = os.path.join(results_path, "final_results")
     if hitpoly_path is None:
-        hitpoly_path = os.path.join(home_dir, "ForceFieldNet")
+        hitpoly_path = os.path.join(home_dir, "HiTPoly")
     if htvs_path is None:
         htvs_path = os.path.join(home_dir, "htvs")
 
@@ -85,7 +85,7 @@ def run(
     if charges == "LIT":
         # TEMP ONLY FOR PEO
         lit_charges_save_path = (
-            "/home/trios/ForceFieldNet/data/forcefield_files/PEO_KOZ_charges"
+            "/home/trios/HiTPoly/data/forcefield_files/PEO_KOZ_charges"
         )
         if not lit_charges_save_path:
             raise ValueError("A path for literature/custom chargers must be defined")
@@ -623,7 +623,7 @@ if __name__ == "__main__":
         "-ecs", "--end_carbons", help="If end carbons should be added when creating the polymer", default="True"
     )
     parser.add_argument(
-        "-fnet", "--hitpoly_path", help="Path towards the ForceFieldNet folder", default="None"
+        "-fnet", "--hitpoly_path", help="Path towards the HiTPoly folder", default="None"
     )
     parser.add_argument(
         "-htvs", "--htvs_path", help="Path towards the HTVS folder", default="None"
