@@ -38,6 +38,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 import itertools
 from openmm.app import PDBFile
+import ast
 
 def write_atom_names_rdf_from_pdb(pdb_path, output_path="atom_names_rdf.txt"):
     pdb = PDBFile(pdb_path)
