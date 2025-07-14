@@ -511,6 +511,18 @@ def run(
         single_ion_conductor = single_ion_conductor,
     )
 
+    if polymerization_mode in ["block", "alternating"]:
+        write_atom_names_rdf_from_pdb(
+            f"{save_path}/packed_box.pdb",
+            f"{save_path}/atom_names_rdf.txt"
+        )
+
+        write_atom_labels_from_log(
+            atom_names_file=f"{save_path}/atom_names_rdf.txt",
+            log_file=f"{save_path}/final_polymer_details.txt",
+            output_file=f"{save_path}/atom_names_all.rdf.txt"
+        )
+
     final_save_path = f"{save_path}/openmm_saver"
     if not os.path.isdir(final_save_path):
         os.makedirs(final_save_path)
