@@ -31,7 +31,7 @@ def run(
     poly_name="PEO",
     charges="LPG",
     add_end_Cs=True,
-    ffnet_path = None,
+    hitpoly_path = None,
     htvs_path = None,
     salt_smiles=None,
     salt_paths=None,
@@ -61,8 +61,8 @@ def run(
         results_path = os.path.join(home_dir, "results")
     if final_path is None:
         final_path = os.path.join(results_path, "final_results")
-    if ffnet_path is None:
-        ffnet_path = os.path.join(home_dir, "ForceFieldNet")
+    if hitpoly_path is None:
+        hitpoly_path = os.path.join(home_dir, "ForceFieldNet")
     if htvs_path is None:
         htvs_path = os.path.join(home_dir, "htvs")
 
@@ -92,7 +92,7 @@ def run(
 
     if salt:
         if not salt_smiles and not salt_paths and not salt_data_paths:
-            salt_path = f"{ffnet_path}/data/pdb_files"
+            salt_path = f"{hitpoly_path}/data/pdb_files"
 
             salt_smiles = [
                 f"[{cation}+]", "O=S(=O)([N-]S(=O)(=O)C(F)(F)F)C(F)(F)F",]
@@ -103,8 +103,8 @@ def run(
             ]
 
             salt_data_paths = [
-                f"{ffnet_path}/data/forcefield_files/lammps_{cation}_q100.data",
-                f"{ffnet_path}/data/forcefield_files/lammps_TFSI_q100.data",
+                f"{hitpoly_path}/data/forcefield_files/lammps_{cation}_q100.data",
+                f"{hitpoly_path}/data/forcefield_files/lammps_TFSI_q100.data",
             ]
 
         elif not salt_smiles or not salt_paths or not salt_data_paths:
@@ -369,7 +369,7 @@ def run(
 
     #Generate combined source dictionary which runs ligpargen on each oligomer in a loop and gets atom types from 
     # opology dataset to then run param dictionary and combine everything.
-    combined_param_dict, atoms_short, atom_names_short = create_combined_param_dict(oligomers_list, ligpargen_path, ffnet_path, platform)
+    combined_param_dict, atoms_short, atom_names_short = create_combined_param_dict(oligomers_list, ligpargen_path, hitpoly_path, platform)
 
     #Update the parameter dictionary to use the combined parameters
     param_dict = combined_param_dict
@@ -380,7 +380,7 @@ def run(
     print(f"COMBINED SMILES {combined_smiles_list}")
 
     #Create a new dataset with all oligomers and the long molecule
-    train_args = FFNetArgs()
+    train_args = hitpolyArgs()
     train_molecule_data = [
         TopologyBuilder(
             smiles=[i], train_args=train_args, load_geoms=False, lj_from_file=False
@@ -623,7 +623,7 @@ if __name__ == "__main__":
         "-ecs", "--end_carbons", help="If end carbons should be added when creating the polymer", default="True"
     )
     parser.add_argument(
-        "-fnet", "--ffnet_path", help="Path towards the ForceFieldNet folder", default="None"
+        "-fnet", "--hitpoly_path", help="Path towards the ForceFieldNet folder", default="None"
     )
     parser.add_argument(
         "-htvs", "--htvs_path", help="Path towards the HTVS folder", default="None"
@@ -716,7 +716,7 @@ if __name__ == "__main__":
         args.salt = True
 
     # Convert paths to None if "None" is provided
-    ffnet_path = None if args.ffnet_path == "None" else args.ffnet_path
+    hitpoly_path = None if args.hitpoly_path == "None" else args.hitpoly_path
     htvs_path = None if args.htvs_path == "None" else args.htvs_path
     final_path = None if args.final_path == "None" else args.final_path
     results_path = None if args.final_path == "None" else args.results_path
@@ -743,7 +743,7 @@ if __name__ == "__main__":
         poly_name=args.poly_name,
         charges=args.charge_type,
         add_end_Cs=add_end_Cs,
-        ffnet_path=ffnet_path,
+        hitpoly_path=hitpoly_path,
         htvs_path=htvs_path,
         reaction=args.reaction,
         product_index=int(args.product_index),
