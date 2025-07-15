@@ -20,12 +20,12 @@ from rdkit import Chem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
 
-from ffnet.writers.file_writers import json_read
-from ffnet.utils.args import FFNetArgs
-from ffnet.data.builder import TopologyBuilder, TopologyDataset
-from ffnet.data.ff_file_reader import ForceFieldFileReader
-from ffnet.utils.constants import NUM_TO_ELEMENT, ELEMENT_TO_NUM
-from ffnet.simulations.openmm_scripts import (
+from hitpoly.writers.file_writers import json_read
+from hitpoly.utils.args import hitpolyArgs
+from hitpoly.data.builder import TopologyBuilder, TopologyDataset
+from hitpoly.data.ff_file_reader import ForceFieldFileReader
+from hitpoly.utils.constants import NUM_TO_ELEMENT, ELEMENT_TO_NUM
+from hitpoly.simulations.openmm_scripts import (
     equilibrate_polymer,
     equilibrate_system_1,
     equilibrate_system_2,
@@ -509,7 +509,7 @@ def get_atom_count(
     return num_atoms
 
 
-def create_ligpargen(smiles, ligpargen_path, ffnet_path, mol_filename, output_prefix, platform):
+def create_ligpargen(smiles, ligpargen_path, hitpoly_path, mol_filename, output_prefix, platform):
     # Directly use the provided SMILES string to create the molecule
     mol_initial = Chem.MolFromSmiles(smiles)
         
@@ -541,7 +541,7 @@ def create_ligpargen(smiles, ligpargen_path, ffnet_path, mol_filename, output_pr
         os.chdir(ligpargen_path)
         command = f"LigParGen -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l"
         subprocess.run(command, shell=True)
-        os.chdir(ffnet_path)
+        os.chdir(hitpoly_path)
     elif platform == "supercloud":
         supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix)
     elif platform == "perlmutter":
@@ -982,7 +982,7 @@ def generate_parameter_dict(save_path, output_prefix, atom_names, atoms, bonds_t
     return param_dict
 
 
-def create_combined_param_dict(smiles_list, ligpargen_path, ffnet_path, platform):
+def create_combined_param_dict(smiles_list, ligpargen_path, hitpoly_path, platform):
     import os
     import time
 
@@ -1006,7 +1006,7 @@ def create_combined_param_dict(smiles_list, ligpargen_path, ffnet_path, platform
     }
 
     # Create the combined dataset with all oligomers
-    train_args = FFNetArgs()
+    train_args = hitpolyArgs()
     train_args.discrete_flag = True  # Set the discrete_flag to True
     train_molecule_data = [
         TopologyBuilder(
@@ -1025,7 +1025,7 @@ def create_combined_param_dict(smiles_list, ligpargen_path, ffnet_path, platform
         mol_initial, smiles_initial = create_ligpargen(
             smiles=smiles,
             ligpargen_path=ligpargen_path,
-            ffnet_path=ffnet_path,
+            hitpoly_path=hitpoly_path,
             mol_filename=mol_filename,
             output_prefix=output_prefix,
             platform=platform
@@ -1313,7 +1313,7 @@ def creating_ff_and_resid_files(mol_dict, atom_types_list, index=None):
         for ind, (atom_pdb, charge) in enumerate(
             zip(
                 mol["mol_pdb"]._residues[0]._atoms,
-                mol["mol_ffnet"].pair_params[:, 0].detach().numpy(),
+                mol["mol_hitpoly"].pair_params[:, 0].detach().numpy(),
             )
         ):
             string = f'<Atom name="{atom_pdb.name}" type="{atom_pdb.name}" />' 
@@ -1321,7 +1321,7 @@ def creating_ff_and_resid_files(mol_dict, atom_types_list, index=None):
             #print(f"Added atom {atom_pdb.name} with charge {charge}")
         
         # Debugging bonds
-        for bond in mol["mol_ffnet"].bonds.numpy():
+        for bond in mol["mol_hitpoly"].bonds.numpy():
             total_atoms = len(mol["mol_pdb"]._residues[0]._atoms)
 
             # Check if bond indices are within range
@@ -1340,8 +1340,8 @@ def creating_ff_and_resid_files(mol_dict, atom_types_list, index=None):
     for key, mol in mol_dict.items():
         print(f"Processing Harmonic Bonds for molecule {key}")
         for bond, param in zip(
-            mol["mol_ffnet"].bonds.detach().numpy(),
-            mol["mol_ffnet"].bond_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].bonds.detach().numpy(),
+            mol["mol_hitpoly"].bond_params_openmm.detach().numpy(),
         ):
             if bond[0] >= len(mol["mol_pdb"]._residues[0]._atoms) or bond[1] >= len(mol["mol_pdb"]._residues[0]._atoms):
                 print(f"Error: Bond indices out of range for harmonic bond in molecule {key}")
@@ -1359,8 +1359,8 @@ def creating_ff_and_resid_files(mol_dict, atom_types_list, index=None):
     for key, mol in mol_dict.items():
         print(f"Processing Harmonic Angles for molecule {key}")
         for angle, param in zip(
-            mol["mol_ffnet"].angles.detach().numpy(),
-            mol["mol_ffnet"].angle_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].angles.detach().numpy(),
+            mol["mol_hitpoly"].angle_params_openmm.detach().numpy(),
         ):
             if (
                 angle[0] >= len(mol["mol_pdb"]._residues[0]._atoms) or
@@ -1384,8 +1384,8 @@ def creating_ff_and_resid_files(mol_dict, atom_types_list, index=None):
     for key, mol in mol_dict.items():
         print(f"Processing Torsion for molecule {key}")
         for dihedral, param in zip(
-            mol["mol_ffnet"].dihedrals.detach().numpy(),
-            mol["mol_ffnet"].dihedral_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].dihedrals.detach().numpy(),
+            mol["mol_hitpoly"].dihedral_params_openmm.detach().numpy(),
         ):
             if (
                 dihedral[0] >= len(mol["mol_pdb"]._residues[0]._atoms) or
@@ -1417,7 +1417,7 @@ def creating_ff_and_resid_files(mol_dict, atom_types_list, index=None):
         for ind, (atom_pdb, param) in enumerate(
             zip(
                 mol["mol_pdb"]._residues[0]._atoms,
-                mol["mol_ffnet"].pair_params_openmm.detach().numpy(),
+                mol["mol_hitpoly"].pair_params_openmm.detach().numpy(),
             )
         ):
             string = f'<Atom charge="{param[0]}" epsilon="{param[1]}" sigma="{param[2]}" type="{atom_pdb.name}" />'
@@ -1434,14 +1434,14 @@ def creating_ff_and_resid_files(mol_dict, atom_types_list, index=None):
         for ind, (atom_pdb, charge) in enumerate(
             zip(
                 mol["mol_pdb"]._residues[0]._atoms,
-                mol["mol_ffnet"].pair_params[:, 0].detach().numpy(),
+                mol["mol_hitpoly"].pair_params[:, 0].detach().numpy(),
             )
         ):
             string = f'<Atom name="{atom_pdb.name}" type="{atom_pdb.name}" />'
             ff_file_resid.append(string)
             #print(f"Added Residue Atom {atom_pdb.name}")
         
-        for bond in mol["mol_ffnet"].bonds.numpy():
+        for bond in mol["mol_hitpoly"].bonds.numpy():
             atom1 = mol["mol_pdb"]._residues[0]._atoms[bond[0]].name
             atom2 = mol["mol_pdb"]._residues[0]._atoms[bond[1]].name
             string = f'<Bond from="{atom1}" to="{atom2}" />'
@@ -1486,7 +1486,7 @@ def creating_ff_and_resid_files_gromacs(
         for ind, (atom_pdb, param) in enumerate(
             zip(
                 mol["mol_pdb"]._residues[0]._atoms,
-                mol["mol_ffnet"].pair_params_openmm.detach().numpy(),
+                mol["mol_hitpoly"].pair_params_openmm.detach().numpy(),
             )
         ):
             a_name, a_class, a_elem, a_mass = atom_types_list[atom_ind]
@@ -1501,14 +1501,14 @@ def creating_ff_and_resid_files_gromacs(
         print(f"Name: {n}")
         
         # Access and print bond parameters before entering the bond loop
-        bond_params = mol["mol_ffnet"].bond_params_openmm.detach().numpy()
-        bonds = mol["mol_ffnet"].bonds.detach().numpy()
+        bond_params = mol["mol_hitpoly"].bond_params_openmm.detach().numpy()
+        bonds = mol["mol_hitpoly"].bonds.detach().numpy()
         print(f"Bonds for molecule {n} ({key}): {bonds}")
         print(f"Bond Params: {bond_params}")
         
         ff_file = []
         ff_file.append(";")
-        ff_file.append("; GENERATED BY FFNet")
+        ff_file.append("; GENERATED BY hitpoly")
         ff_file.append("; Jurgis Ruza @ MIT ")
         ff_file.append(";")
         ff_file.append("[ moleculetype ]")
@@ -1525,7 +1525,7 @@ def creating_ff_and_resid_files_gromacs(
         for ind, (atom_pdb, param) in enumerate(
             zip(
                 mol["mol_pdb"]._residues[0]._atoms,
-                mol["mol_ffnet"].pair_params_openmm.detach().numpy(),
+                mol["mol_hitpoly"].pair_params_openmm.detach().numpy(),
             )
         ):
             a_name, a_class, a_elem, a_mass = atom_types_list[atom_ind]
@@ -1549,12 +1549,12 @@ def creating_ff_and_resid_files_gromacs(
         #print(f"initial to updated atom dict {initial_to_updated_atom_name}")
 
         print(f"Number of atoms in mol_pdb for {n}: {len(mol['mol_pdb']._residues[0]._atoms)}")
-        print(f"Bond information for molecule {n}: {mol['mol_ffnet'].bonds.detach().numpy()}")
+        print(f"Bond information for molecule {n}: {mol['mol_hitpoly'].bonds.detach().numpy()}")
 
 
         for bond, param in zip(
-            mol["mol_ffnet"].bonds.detach().numpy(),
-            mol["mol_ffnet"].bond_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].bonds.detach().numpy(),
+            mol["mol_hitpoly"].bond_params_openmm.detach().numpy(),
         ):
             atom1 = mol["mol_pdb"]._residues[0]._atoms[bond[0]].name
             atom2 = mol["mol_pdb"]._residues[0]._atoms[bond[1]].name
@@ -1568,8 +1568,8 @@ def creating_ff_and_resid_files_gromacs(
         ff_file.append("[ angles ]")
         ff_file.append(";  ai    aj    ak funct            c0            c1")
         for angle, param in zip(
-            mol["mol_ffnet"].angles.detach().numpy(),
-            mol["mol_ffnet"].angle_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].angles.detach().numpy(),
+            mol["mol_hitpoly"].angle_params_openmm.detach().numpy(),
         ):
             atom1 = mol["mol_pdb"]._residues[0]._atoms[angle[0]].name
             atom2 = mol["mol_pdb"]._residues[0]._atoms[angle[1]].name
@@ -1590,8 +1590,8 @@ def creating_ff_and_resid_files_gromacs(
             ";  ai    aj    ak    al funct            c0            c1            c2            c3            c4            c5"
         )
         for dihedral, param in zip(
-            mol["mol_ffnet"].dihedrals.detach().numpy(),
-            mol["mol_ffnet"].dihedral_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].dihedrals.detach().numpy(),
+            mol["mol_hitpoly"].dihedral_params_openmm.detach().numpy(),
         ):
             atom1 = mol["mol_pdb"]._residues[0]._atoms[dihedral[0]].name
             atom2 = mol["mol_pdb"]._residues[0]._atoms[dihedral[1]].name
@@ -1614,7 +1614,7 @@ def creating_ff_and_resid_files_gromacs(
 
     ff_file = []
     ff_file.append(";")
-    ff_file.append("; GENERATED BY FFNet")
+    ff_file.append("; GENERATED BY hitpoly")
     ff_file.append("; Jurgis Ruza @ MIT ")
     ff_file.append(";")
     ff_file.append("[ atomtypes ]")
@@ -1624,7 +1624,7 @@ def creating_ff_and_resid_files_gromacs(
         for ind, (atom_pdb, param) in enumerate(
             zip(
                 mol["mol_pdb"]._residues[0]._atoms,
-                mol["mol_ffnet"].pair_params_openmm.detach().numpy(),
+                mol["mol_hitpoly"].pair_params_openmm.detach().numpy(),
             )
         ):
             a_name, a_class, a_elem, a_mass = atom_types_list[atom_ind]
@@ -1639,8 +1639,8 @@ def creating_ff_and_resid_files_gromacs(
     ff_file.append(";  i    j  funct            b0            kb")
     for n, (key, mol) in zip(name_iterables, mol_dict.items()):
         for bond, param in zip(
-            mol["mol_ffnet"].bonds.detach().numpy(),
-            mol["mol_ffnet"].bond_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].bonds.detach().numpy(),
+            mol["mol_hitpoly"].bond_params_openmm.detach().numpy(),
         ):
             atom1 = mol["mol_pdb"]._residues[0]._atoms[bond[0]].name
             atom2 = mol["mol_pdb"]._residues[0]._atoms[bond[1]].name
@@ -1651,8 +1651,8 @@ def creating_ff_and_resid_files_gromacs(
     ff_file.append(";  i    j    k funct            theta            k0")
     for key, mol in mol_dict.items():
         for angle, param in zip(
-            mol["mol_ffnet"].angles.detach().numpy(),
-            mol["mol_ffnet"].angle_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].angles.detach().numpy(),
+            mol["mol_hitpoly"].angle_params_openmm.detach().numpy(),
         ):
             atom1 = mol["mol_pdb"]._residues[0]._atoms[angle[0]].name
             atom2 = mol["mol_pdb"]._residues[0]._atoms[angle[1]].name
@@ -1674,8 +1674,8 @@ def creating_ff_and_resid_files_gromacs(
     )
     for key, mol in mol_dict.items():
         for dihedral, param in zip(
-            mol["mol_ffnet"].dihedrals.detach().numpy(),
-            mol["mol_ffnet"].dihedral_params_openmm.detach().numpy(),
+            mol["mol_hitpoly"].dihedrals.detach().numpy(),
+            mol["mol_hitpoly"].dihedral_params_openmm.detach().numpy(),
         ):
             atom1 = mol["mol_pdb"]._residues[0]._atoms[dihedral[0]].name
             atom2 = mol["mol_pdb"]._residues[0]._atoms[dihedral[1]].name
@@ -2171,7 +2171,7 @@ def minimize_polymer(
         packed_name = f"polymer_conformation_{i}"
         
         # Load force field parameters for the polymer
-        train_dataset = load_ffnet_params(
+        train_dataset = load_hitpoly_params(
             [smiles],  # Handle a single SMILES at a time
             [],
         )
@@ -2216,8 +2216,8 @@ def minimize_polymer(
             print(f"Processing molecule: {mol_key} (Scaling: {lammps_openmm_scaling})")
 
             # Apply scaling based on the condition above
-            mol_dict[mol_key]["mol_ffnet"] = param_scaling_openmm(
-                mol_dict[mol_key]["mol_ffnet"], lammps_openmm_scaling
+            mol_dict[mol_key]["mol_hitpoly"] = param_scaling_openmm(
+                mol_dict[mol_key]["mol_hitpoly"], lammps_openmm_scaling
         )
 
         # Create force field and residue files for the polymer
@@ -2244,7 +2244,7 @@ def minimize_polymer(
 
     print("All polymer conformations have been minimized.")
 
-def load_ffnet_params(
+def load_hitpoly_params(
     poly_smiles: list,
     salt_smiles: list,
     salt_data_paths: list = [],
@@ -2252,7 +2252,7 @@ def load_ffnet_params(
     poly_count: int = 1,
 ):
     smiles = poly_smiles + salt_smiles
-    train_args = FFNetArgs()
+    train_args = hitpolyArgs()
 
     train_molecule_data = [
         TopologyBuilder(
@@ -2311,7 +2311,7 @@ def load_pdb_create_mol_dict(
         if idx < len(polymer_train_data):
             smiles = polymer_train_data[idx].smiles[0]
             mol_dict[smiles] = {}
-            mol_dict[smiles]["mol_ffnet"] = polymer_train_data[idx]
+            mol_dict[smiles]["mol_hitpoly"] = polymer_train_data[idx]
             mol_dict[smiles]["mol_pdb"] = mol
             
             # Debug print for chain assignment
@@ -2345,7 +2345,7 @@ def load_pdb_create_mol_dict(
 
             if np.array_equal(np.array(rdkit_atoms), np.array(pdb_atoms)):
                 mol_dict[smiles] = {}
-                mol_dict[smiles]["mol_ffnet"] = salt_train_mol
+                mol_dict[smiles]["mol_hitpoly"] = salt_train_mol
                 mol_dict[smiles]["mol_pdb"] = salt_pdb_mol
                 print(f"Match confirmed for salt SMILES: {smiles} with PDB atomic numbers: {pdb_atoms}")
                 matched = True
@@ -2766,7 +2766,7 @@ def write_atom_labels_from_log(
 #         raise ValueError("concentration length must match the number of salt_smiles")
 
 #     print(f"Making all the force field files for simulations")
-#     train_dataset = load_ffnet_params(
+#     train_dataset = load_hitpoly_params(
 #         long_smiles,
 #         salt_smiles,
 #         salt_data_paths=salt_data_paths,
@@ -2836,8 +2836,8 @@ def write_atom_labels_from_log(
 #         print(f"Processing molecule: {mol_key} (Scaling: {lammps_openmm_scaling})")
 
 #         # Apply scaling based on the condition above
-#         mol_dict[mol_key]["mol_ffnet"] = param_scaling_openmm(
-#             mol_dict[mol_key]["mol_ffnet"], lammps_openmm_scaling
+#         mol_dict[mol_key]["mol_hitpoly"] = param_scaling_openmm(
+#             mol_dict[mol_key]["mol_hitpoly"], lammps_openmm_scaling
 #     )
 
         
@@ -2931,7 +2931,7 @@ def create_box_and_ff_files_openmm(
     poly_count = len(set(long_smiles))
     print(f"Polymer count (number of unique polymers): {poly_count}")
 
-    train_dataset = load_ffnet_params(
+    train_dataset = load_hitpoly_params(
         long_smiles,
         salt_smiles,
         salt_data_paths=salt_data_paths,
@@ -3007,8 +3007,8 @@ def create_box_and_ff_files_openmm(
         print(f"Processing molecule: {mol_key} (Scaling: {lammps_openmm_scaling})")
 
         # Apply scaling based on the condition above
-        mol_dict[mol_key]["mol_ffnet"] = param_scaling_openmm(
-            mol_dict[mol_key]["mol_ffnet"], lammps_openmm_scaling
+        mol_dict[mol_key]["mol_hitpoly"] = param_scaling_openmm(
+            mol_dict[mol_key]["mol_hitpoly"], lammps_openmm_scaling
     )
         
     ff_file, ff_file_resid, name_iterables = creating_ff_and_resid_files(
