@@ -545,7 +545,7 @@ def create_ligpargen(smiles, ligpargen_path, hitpoly_path, mol_filename, output_
     elif platform == "supercloud":
         supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix)
     elif platform == "perlmutter":
-        perlmutter_ligpargen(ligpargen_path)
+        perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix)
     elif platform == "engaging":
         engaging_ligpargen(ligpargen_path)
     
@@ -593,14 +593,19 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
             time.sleep(10)
 
 
-def perlmutter_ligpargen(ligpargen_path):
+def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
     ligpargen = os.environ.get("LigParGen")
+    print(f"LigParGen path: {ligpargen}")  # Debugging line
+    print(f"Molecule filename: {mol_filename}")  # Debugging line
+    print(f"Output prefix: {output_prefix}")  # Debugging line
     with open(f"{ligpargen_path}/run.sh", "w") as f:
         f.write("#!/bin/bash" + "\n")
+        f.write("#SBATCH --job-name=ligpargen" + "\n")
         f.write("#SBATCH --account=m5068" + "\n")
+        f.write("#SBATCH -C cpu" + "\n")
         f.write("#SBATCH --qos=debug" + "\n")
-        f.write("#SBATCH --constraint=cpu" + "\n")
         f.write("#SBATCH --nodes=1" + "\n")
+        f.write("#SBATCH --ntasks-per-node=1" + "\n")
         f.write("#SBATCH --cpus-per-task=1" + "\n")
         f.write("#SBATCH --time=00:20:00" + "\n")
         f.write("\n")
@@ -610,16 +615,20 @@ def perlmutter_ligpargen(ligpargen_path):
         f.write("source activate htvs" + "\n")
         f.write("cwd=$(pwd)" + "\n")
         f.write(f"cd {ligpargen_path}" + "\n")
-        f.write(f"LigParGen -m poly.mol -o 0 -c 0 -r PLY -d . -l" + "\n")
+        f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
         f.write("cd $cwd" + "\n")
     command = f"sbatch {ligpargen_path}/run.sh"
     subprocess.run(command, shell=True)
+    # Wait for the output file (with output_prefix) to be generated
     t0 = time.time()
+    expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
     while True:
-        if os.path.exists("PLY.xml"):
+        if os.path.exists(expected_output_file):
             time.sleep(2)
+            print(f"Output file {expected_output_file} found.")
             break
-        elif time.time() - t0 > 300:
+        elif time.time() - t0 > 300:  # Timeout after 5 minutes
+            print(f"Timeout: {expected_output_file} not found within the time limit.")
             break
         else:
             time.sleep(10)
