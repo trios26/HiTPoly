@@ -612,7 +612,7 @@ def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
         f.write("# Load modules" + "\n")
         # f.write("source /etc/profile" + "\n")
         f.write("source $HOME/.bashrc" + "\n")
-        f.write("source activate htvs" + "\n")
+        f.write("conda activate htvs" + "\n")
         f.write("cwd=$(pwd)" + "\n")
         f.write(f"cd {ligpargen_path}" + "\n")
         f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
