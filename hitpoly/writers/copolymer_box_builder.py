@@ -593,41 +593,122 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
             time.sleep(10)
 
 
+# def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
+#     ligpargen = os.environ.get("LigParGen")
+#     print(f"LigParGen path: {ligpargen}")  # Debugging line
+#     print(f"Molecule filename: {mol_filename}")  # Debugging line
+#     print(f"Output prefix: {output_prefix}")  # Debugging line
+#     with open(f"{ligpargen_path}/run.sh", "w") as f:
+#         f.write("#!/bin/bash" + "\n")
+#         f.write("#SBATCH --job-name=ligpargen" + "\n")
+#         f.write("#SBATCH --account=m5068" + "\n")
+#         f.write("#SBATCH -C cpu" + "\n")
+#         f.write("#SBATCH --qos=debug" + "\n")
+#         f.write("#SBATCH --nodes=1" + "\n")
+#         f.write("#SBATCH --ntasks=1" + "\n")
+#         f.write("#SBATCH --cpus-per-task=1" + "\n")
+#         f.write("#SBATCH --time=0:30:00" + "\n")
+#         f.write("\n")
+#         f.write("# Load modules" + "\n")
+#         # f.write("source /etc/profile" + "\n")
+#         f.write("source $HOME/.bashrc" + "\n")
+#         f.write("conda activate htvs" + "\n")
+#         f.write("cwd=$(pwd)" + "\n")
+#         f.write(f"cd {ligpargen_path}" + "\n")
+#         f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
+#         f.write("cd $cwd" + "\n")
+#     command = f"sbatch {ligpargen_path}/run.sh"
+#     subprocess.run(command, shell=True)
+#     # Wait for the output file (with output_prefix) to be generated
+#     t0 = time.time()
+#     expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
+#     while True:
+#         if os.path.exists(expected_output_file):
+#             time.sleep(2)
+#             print(f"Output file {expected_output_file} found.")
+#             break
+#         elif time.time() - t0 > 300:  # Timeout after 5 minutes
+#             print(f"Timeout: {expected_output_file} not found within the time limit.")
+#             break
+#         else:
+#             time.sleep(10)
+
 def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
+    # 1. Check environment variable
     ligpargen = os.environ.get("LigParGen")
     print(f"LigParGen path: {ligpargen}")  # Debugging line
+
+    if ligpargen is None:
+        print("ERROR: Environment variable LigParGen is not set!")
+        return
+
     print(f"Molecule filename: {mol_filename}")  # Debugging line
     print(f"Output prefix: {output_prefix}")  # Debugging line
-    with open(f"{ligpargen_path}/run.sh", "w") as f:
-        f.write("#!/bin/bash" + "\n")
-        f.write("#SBATCH --job-name=ligpargen" + "\n")
-        f.write("#SBATCH --account=m5068" + "\n")
-        f.write("#SBATCH -C cpu" + "\n")
-        f.write("#SBATCH --qos=debug" + "\n")
-        f.write("#SBATCH --nodes=1" + "\n")
-        f.write("#SBATCH --ntasks=1" + "\n")
-        f.write("#SBATCH --cpus-per-task=1" + "\n")
-        f.write("#SBATCH --time=0:30:00" + "\n")
+
+    # 2. Build the full path to the run script
+    run_script_path = os.path.join(ligpargen_path, "run.sh")
+
+    # 3. Write the SBATCH script
+    with open(run_script_path, "w") as f:
+        f.write("#!/bin/bash\n")
+        f.write("#SBATCH --job-name=ligpargen\n")
+        f.write("#SBATCH --account=m5068\n")
+        f.write("#SBATCH -C cpu\n")
+        f.write("#SBATCH --qos=debug\n")
+        f.write("#SBATCH --nodes=1\n")
+        f.write("#SBATCH --ntasks=1\n")
+        f.write("#SBATCH --cpus-per-task=1\n")
+        f.write("#SBATCH --time=0:30:00\n")
+        f.write("#SBATCH --output=ligpargen-%j.out\n")
         f.write("\n")
-        f.write("# Load modules" + "\n")
-        # f.write("source /etc/profile" + "\n")
-        f.write("source $HOME/.bashrc" + "\n")
-        f.write("conda activate htvs" + "\n")
-        f.write("cwd=$(pwd)" + "\n")
-        f.write(f"cd {ligpargen_path}" + "\n")
+        f.write("# Load modules\n")
+        f.write("source $HOME/.bashrc\n")
+        f.write("conda activate htvs\n")  # <-- use conda activate!
+        f.write("cwd=$(pwd)\n")
+        f.write(f"cd {ligpargen_path}\n")
         f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
-        f.write("cd $cwd" + "\n")
-    command = f"sbatch {ligpargen_path}/run.sh"
-    subprocess.run(command, shell=True)
-    # Wait for the output file (with output_prefix) to be generated
-    t0 = time.time()
+        f.write("cd $cwd\n")
+
+    # 4. Confirm the file exists
+    if not os.path.exists(run_script_path):
+        print("ERROR: run.sh script was not created!")
+        return
+
+    # 5. Print script for debugging
+    print("\n--- Contents of run.sh ---")
+    with open(run_script_path) as f:
+        print(f.read())
+    print("--- End of run.sh ---\n")
+
+    # 6. Check permissions (not strictly required for sbatch, but useful)
+    perm = os.stat(run_script_path).st_mode
+    print(f"Permissions on run.sh: {oct(perm)}")
+
+    # 7. Test manual submission first
+    print("Submitting job via sbatch...")
+    result = subprocess.run(
+        f"sbatch {run_script_path}",
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    print("STDOUT:", result.stdout.strip())
+    print("STDERR:", result.stderr.strip())
+
+    # 8. Check for errors in submission
+    if result.returncode != 0:
+        print("ERROR: sbatch submission failed!")
+        return
+
+    # 9. Wait for the expected output
     expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
+    t0 = time.time()
     while True:
         if os.path.exists(expected_output_file):
             time.sleep(2)
             print(f"Output file {expected_output_file} found.")
             break
-        elif time.time() - t0 > 300:  # Timeout after 5 minutes
+        elif time.time() - t0 > 300:
             print(f"Timeout: {expected_output_file} not found within the time limit.")
             break
         else:
