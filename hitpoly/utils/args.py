@@ -35,3 +35,9 @@ class hitpolyArgs(Tap):
     The number of nearest neighbor convolutions used to determine discrete atomic environments based on 
     message passing
     """
+    init_params: bool = False
+    """
+    This is only used when discete_flag = True
+    True - set initial guesses of force field parameters based on training data averages
+    False - TODO - need to create code to initialize force field parameters randomly, currently just does not create any params
+    """
