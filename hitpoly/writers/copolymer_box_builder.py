@@ -605,7 +605,7 @@ def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
         f.write("#SBATCH -C cpu" + "\n")
         f.write("#SBATCH --qos=debug" + "\n")
         f.write("#SBATCH --nodes=1" + "\n")
-        f.write("#SBATCH --ntasks-per-node=1" + "\n")
+        f.write("#SBATCH --ntasks=1" + "\n")
         f.write("#SBATCH --cpus-per-task=1" + "\n")
         f.write("#SBATCH --time=0:30:00" + "\n")
         f.write("\n")
