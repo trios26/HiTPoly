@@ -719,7 +719,7 @@ if __name__ == "__main__":
     hitpoly_path = None if args.hitpoly_path == "None" else args.hitpoly_path
     htvs_path = None if args.htvs_path == "None" else args.htvs_path
     final_path = None if args.final_path == "None" else args.final_path
-    results_path = None if args.final_path == "None" else args.results_path
+    results_path = None if args.results_path == "None" else args.results_path
 
     # Ensure that monomer2 and monomer3 are either a valid SMILES string or None
     monomer2 = None if args.monomer2 == "None" else args.monomer2
