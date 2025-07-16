@@ -654,7 +654,7 @@ def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
         f.write("#SBATCH --job-name=ligpargen\n")
         f.write("#SBATCH --account=m5068\n")
         f.write("#SBATCH -C cpu\n")
-        f.write("#SBATCH --qos=regular\n")
+        f.write("#SBATCH --qos=debug\n")
         f.write("#SBATCH --nodes=1\n")
         f.write("#SBATCH --ntasks=1\n")
         f.write("#SBATCH --cpus-per-task=1\n")
@@ -663,7 +663,7 @@ def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
         f.write("\n")
         f.write("# Load modules\n")
         f.write("source $HOME/.bashrc\n")
-        f.write("conda activate htvs\n")  # <-- use conda activate!
+        f.write("conda activate htvs\n")  
         f.write("cwd=$(pwd)\n")
         f.write(f"cd {ligpargen_path}\n")
         f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
@@ -679,10 +679,6 @@ def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
     with open(run_script_path) as f:
         print(f.read())
     print("--- End of run.sh ---\n")
-
-    # 6. Check permissions (not strictly required for sbatch, but useful)
-    perm = os.stat(run_script_path).st_mode
-    print(f"Permissions on run.sh: {oct(perm)}")
 
     # 7. Test manual submission first
     print("Submitting job via sbatch...")
