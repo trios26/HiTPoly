@@ -710,9 +710,6 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
 #         else:
 #             time.sleep(10)
 
-import os
-import subprocess
-import time
 
 def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
     # 1. Check environment variable
@@ -735,7 +732,11 @@ def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
         f.write("\n")
         f.write("# Load modules\n")
         f.write("source $HOME/.bashrc\n")
-        f.write("conda activate htvs\n")  
+        f.write("conda activate htvs\n")
+        
+        # ✅ **Add PYTHONPATH fix here**
+        f.write("export PYTHONPATH=/global/homes/t/trios/htvs/ligpargen\n")
+        
         f.write("cwd=$(pwd)\n")
         f.write(f"cd {ligpargen_path}\n")
         f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
