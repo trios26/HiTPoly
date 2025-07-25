@@ -151,6 +151,7 @@ def run(
         num_blocks=num_blocks,
         polymer_chain_length=polymer_chain_length,
         arms=arms,
+        cation=cation,
         blend_mode=True if blend_mode else False
     )
 
