@@ -430,22 +430,6 @@ def run(
     print(f"Bonds Typed (Long Molecules): {all_bonds_typed_long}")
     print(f"Angles (Long Molecules): {all_angles}")
 
-#     if minimize:
-#         minimize_polymer(
-#             save_path=save_path,
-#             short_smiles=oligomers_list,  # List of short SMILES strings for each oligomer
-#             long_smiles=long_smiles_list,  # List of long SMILES strings for each polymer
-#             atoms_long=all_atoms_symbols,  # List of lists with atom symbols for each polymer
-#             atom_names_long=all_atom_names_long,  # List of lists with atom names for each polymer
-#             atoms_short=atoms_short,  # List of atoms for the short SMILES
-#             atom_names_short=atom_names_short,  # List of atom names for the short SMILES
-#             param_dict=param_dict,  # Parameter dictionary for the polymer
-#             lit_charges_save_path=lit_charges_save_path,  # Path for literature charges
-#             charges=charges,  # Charge model (e.g., 'LPG')
-#             htvs_path=htvs_path,  # HTVS path
-#             htvs_details=htvs_details,  # HTVS details dictionary
-# )
-
     if single_ion_conductor:
         print("Using DFT-aware charge neutrality logic based on atom types and DFT charges...")
         # Load your data from a CSV or manually as a DataFrame
@@ -457,7 +441,7 @@ def run(
             original_param_dict=combined_param_dict
         )
 
-        # Count the number of anionic [N-] groups in one polymer from the SMILES
+        # Count the number of anionic groups in one polymer from the SMILES
         n_anions_per_polymer = long_smiles_list[0].count(f"[{anion}-]")
 
         concentration, _ = get_concentration_from_charge_neutrality(
@@ -511,17 +495,17 @@ def run(
         single_ion_conductor = single_ion_conductor,
     )
     #NEEDS DEBUGGING
-    # if polymerization_mode in ["block", "alternating"]:
-    #     write_atom_names_rdf_from_pdb(
-    #         f"{save_path}/packed_box.pdb",
-    #         f"{save_path}/atom_names_rdf.txt"
-    #     )
+    if polymerization_mode in ["block", "alternating"]:
+        write_atom_names_rdf_from_pdb(
+            f"{save_path}/packed_box.pdb",
+            f"{save_path}/atom_names_rdf.txt"
+        )
 
-    #     write_atom_labels_from_log(
-    #         atom_names_file=f"{save_path}/atom_names_rdf.txt",
-    #         log_file=f"{save_path}/final_polymer_details.txt",
-    #         output_file=f"{save_path}/atom_names_all.rdf.txt"
-    #     )
+        write_atom_labels_from_log(
+            atom_names_file=f"{save_path}/atom_names_rdf.txt",
+            log_file=f"{save_path}/final_polymer_details.txt",
+            output_file=f"{save_path}/atom_names_all.rdf.txt"
+        )
 
     final_save_path = f"{save_path}/openmm_saver"
     if not os.path.isdir(final_save_path):
