@@ -616,7 +616,7 @@ if __name__ == "__main__":
         "-pi", "--product_index", help="Product index to use for the reaction", default="0"
     )
     parser.add_argument(
-        "-box", "--box_multiplier", help="PBC box size multiplier for packmol", default="5"
+        "-box", "--box_multiplier", help="PBC box size multiplier for packmol", default="3"
     )
     parser.add_argument(
         "-conf", "--enforce_generation", help="Whether to force rdkit to create a conformation", default="False"
@@ -628,7 +628,7 @@ if __name__ == "__main__":
         "--salt", help="Should salt be added to the simulation", default="True"
     )
     parser.add_argument(
-        "--temperature", help="Simulation temperature", default="430"
+        "--temperature", help="Simulation temperature", default="393"
     )
     parser.add_argument("--simu_length", help="Simulation length, ns", default="100")
     parser.add_argument(
