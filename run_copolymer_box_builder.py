@@ -22,10 +22,9 @@ def run(
     monomers = ["[Cu]CC(c1ccccc1)[Au]","[Cu]CC(C#N)[Au]", "[Cu]CC=CC[Au]"],
     molality = 1.0,
     charge_scale=0.75,
-    polymer_count=1, #this must be set to 1 for random polymers, for other architectures set to the number of chains wanted and set num_random_chains to 0
+    polymer_count=1, 
     total_repeats = 15, #total number of monomers in chain
     fractions = [0.8,0.1,0.1],
-    num_random_chains = 5, #set to 0 for homopolymers, block, alternating
     polymerization_mode = 'random',
     concentration: list = [0, 0],
     poly_name="PEO",
@@ -262,8 +261,54 @@ def run(
 
         if not success:
             raise RuntimeError("Failed to generate homopolymer after multiple attempts.")
+            
+    elif polymerization_mode == "random":
+        # stochastic polymer generation
+        for i in range(polymer_count):
+            success = False
+            retries = 0
+            while not success and retries < MAX_RETRIES:
+                try:
+                    long_smiles, _ = create_long_smiles(
+                        save_path,
+                        monomers,
+                        fractions,
+                        repeats,
+                        add_end_Cs,
+                        reaction,
+                        product_index,
+                        polymerization_mode
+                    )
 
-    elif num_random_chains == 0:
+                    if long_smiles in long_smiles_list:
+                        print(f"Duplicate SMILES: {long_smiles}. Retrying...")
+                        retries += 1
+                        continue
+
+                    filename, mol, minimize = create_conformer_pdb(
+                        path_to_save=save_path,
+                        smiles=long_smiles,
+                        name=f"polymer_conformation_{i}",
+                        enforce_generation=False
+                    )
+
+                    if filename is None or mol is None:
+                        print("Retrying due to failure.")
+                        retries += 1
+                        continue
+
+                    long_smiles_list.append(long_smiles)
+                    filenames.append(filename)
+                    success = True
+
+                except Exception as e:
+                    print(f"Random gen error: {str(e)}. Retrying...")
+                    retries += 1
+
+            if not success:
+                print(f"Skipping chain {i} due to repeated failures.")
+
+    else:
         # All other non-homopolymer, non-blend modes (block, alternating, star, etc.)
         success = False
         retries = 0
@@ -308,52 +353,6 @@ def run(
 
         if not success:
             raise RuntimeError("Failed to generate non-random polymer.")
-
-    else:
-        # num_random_chains > 0 — stochastic polymer generation
-        for i in range(num_random_chains):
-            success = False
-            retries = 0
-            while not success and retries < MAX_RETRIES:
-                try:
-                    long_smiles, _ = create_long_smiles(
-                        save_path,
-                        monomers,
-                        fractions,
-                        repeats,
-                        add_end_Cs,
-                        reaction,
-                        product_index,
-                        polymerization_mode
-                    )
-
-                    if long_smiles in long_smiles_list:
-                        print(f"Duplicate SMILES: {long_smiles}. Retrying...")
-                        retries += 1
-                        continue
-
-                    filename, mol, minimize = create_conformer_pdb(
-                        path_to_save=save_path,
-                        smiles=long_smiles,
-                        name=f"polymer_conformation_{i}",
-                        enforce_generation=False
-                    )
-
-                    if filename is None or mol is None:
-                        print("Retrying due to failure.")
-                        retries += 1
-                        continue
-
-                    long_smiles_list.append(long_smiles)
-                    filenames.append(filename)
-                    success = True
-
-                except Exception as e:
-                    print(f"Random gen error: {str(e)}. Retrying...")
-                    retries += 1
-
-            if not success:
-                print(f"Skipping chain {i} due to repeated failures.")
 
     # Printout for all modes
     print(f"Final FILENAMES HERE: {filenames}")
@@ -474,7 +473,7 @@ def run(
         # Blend: different structures with different counts
         polymer_count = [chains_to_pack[os.path.basename(f)] for f in filenames]
 
-    elif polymerization_mode in ["homopolymer", "block", "alternating", "star"] and num_random_chains == 0:
+    elif polymerization_mode in ["homopolymer", "block", "alternating", "star"]:
         # Single structure replicated N times
         if len(filenames) != 1:
             raise ValueError(f"{polymerization_mode} mode expects exactly one filename.")
@@ -603,9 +602,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-f2", "--fraction_monomer2", help="Fraction of monomer2 in the polymer", default="0.3" #default="0.1"
-    )
-    parser.add_argument(
-        "-nc", "--num_random_chains", help="Number of random chains to generate", default="3"
     )
     parser.add_argument(
         "-pm", "--polymerization_mode", help="Mode for polymerization (e.g., random)", default="random" #random, homopolymer, alternating, block
@@ -737,7 +733,6 @@ if __name__ == "__main__":
         polymer_count=int(args.polymer_count),
         total_repeats=int(args.total_repeats),
         fractions=args.fractions,  # Pass the list of fractions
-        num_random_chains=int(args.num_random_chains),
         polymerization_mode=args.polymerization_mode,
         concentration=[int(args.concentration), int(args.concentration)],
         poly_name=args.poly_name,
