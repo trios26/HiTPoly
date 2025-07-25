@@ -53,43 +53,6 @@ def write_atom_names_rdf_from_pdb(pdb_path, output_path="atom_names_rdf.txt"):
 
     print(f"Created atom_names_rdf.txt at {output_path}")
 
-def label_polymer_atoms_with_substructure(polymer_smiles_list, monomer_smiles, cap_smiles="C"):
-    # Handle input
-    if isinstance(polymer_smiles_list, list):
-        assert len(polymer_smiles_list) == 1, "Expected a list with one polymer SMILES"
-        polymer_smiles = polymer_smiles_list[0]
-    else:
-        polymer_smiles = polymer_smiles_list
-
-    polymer = Chem.AddHs(Chem.MolFromSmiles(polymer_smiles))
-    labels = [3] * polymer.GetNumAtoms()  # Default label: other
-
-    # Label caps as 2
-    cap = Chem.AddHs(Chem.MolFromSmiles(cap_smiles))
-    for match in polymer.GetSubstructMatches(cap):
-        for idx in match:
-            labels[idx] = 2
-
-    # Strip [Cu] and [Au] directly in place before matching
-    monA_smiles = monomer_smiles[0].replace("[Cu]", "").replace("[Au]", "")
-    monB_smiles = monomer_smiles[1].replace("[Cu]", "").replace("[Au]", "")
-
-    # Label monomer A as 0
-    monA = Chem.AddHs(Chem.MolFromSmiles(monA_smiles))
-    for match in polymer.GetSubstructMatches(monA):
-        for idx in match:
-            if labels[idx] == 3:
-                labels[idx] = 0
-
-    # Label monomer B as 1
-    monB = Chem.AddHs(Chem.MolFromSmiles(monB_smiles))
-    for match in polymer.GetSubstructMatches(monB):
-        for idx in match:
-            if labels[idx] == 3:
-                labels[idx] = 1
-
-    return labels
-
 
 def create_oligomers(smiles, polymerization_mode, arms=3):
     try:
@@ -178,7 +141,8 @@ def create_long_smiles(
     num_blocks="None",
     arms="None",
     write_log=True,
-    log_filename=None
+    log_filename=None,
+    cation = "None",
 ):
     try:
         if len(smiles) == 0 or len(fractions) == 0:
@@ -342,6 +306,7 @@ def create_long_smiles(
                 file.write(f"Monomer counts: {monomer_counts}\n")
                 file.write(f"Final SMILES: {final_smiles}\n")
                 file.write(f"Total number of atoms: {total_atoms}\n")
+                file.write(f"Cation: {cation}\n")
             print(f"Saved polymer log to {output_path}")
 
         return final_smiles, total_repeats
@@ -2535,9 +2500,10 @@ def get_concentration_from_molality(
     add_end_Cs,
     polymerization_mode,
     num_blocks,
+    cation,
     polymer_chain_length=1100,
     arms=None,
-    blend_mode=False
+    blend_mode=False,
 ):
     print(f"Inside get_concentration_from_molality - SMILES: {monomers}, Fractions: {fractions}")
 
@@ -2586,7 +2552,8 @@ def get_concentration_from_molality(
                 add_end_Cs=add_end_Cs,
                 polymerization_mode="homopolymer",
                 write_log=True,
-                log_filename=f"homopolymer_{i}.txt"
+                log_filename=f"homopolymer_{i}.txt",
+                cation=cation,
             )
 
             mass = get_mol_mass(long_smiles)
@@ -2638,7 +2605,9 @@ def get_concentration_from_molality(
         num_blocks=num_blocks,
         arms=arms,
         write_log=True,
-        log_filename="final_polymer_details.txt"
+        log_filename="final_polymer_details.txt",
+        cation=cation,
+    
     )
 
     concentration = round(molality * get_mol_mass(long_smiles) * polymer_count / 1000)
