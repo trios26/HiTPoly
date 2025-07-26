@@ -532,11 +532,16 @@ def run(
     write_analysis_script(
         save_path=save_path,
         results_path=results_path,
-        platform=platform,
         repeat_units=repeats,
+        cation=cation,
+        anion=anion,
+        platform=platform,
         simu_temperature=simu_temp,
         prod_run_time=simu_length,
+        xyz_output=25,
+        ani_name_rdf=None
     )
+
 
 
 #Parse args
