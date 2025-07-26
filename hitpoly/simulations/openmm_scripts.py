@@ -1153,7 +1153,7 @@ def prod_run_nvt(
         with open(f"{save_path}/final_state_box.pdb", "w") as f:
             PDBFile.writeFile(modeller.topology, minpositions, f)
 
-
+#changed results path to save_path forn now
 def write_analysis_script(
     save_path,
     results_path,
@@ -1167,7 +1167,7 @@ def write_analysis_script(
     ani_name_rdf=None,
 ):
     if platform == "supercloud":
-        with open(f"{results_path}/run_analysis.sh", "w") as f:
+        with open(f"{save_path}/run_analysis.sh", "w") as f:
             f.write("#!/bin/bash" + "\n")
             f.write("# Load modules" + "\n")
             f.write("source /etc/profile" + "\n")
@@ -1203,3 +1203,34 @@ def write_analysis_script(
                 f" -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
                 + f" --cat {cation} --ani {anion} --ani_rdf {ani_name_rdf} \n"
             )
+    elif platform == "perlmutter":
+        with open(f"{save_path}/run_analysis.sh", "w") as f:
+            f.write("#!/bin/bash\n")
+            f.write("#SBATCH --job-name=analyze_ffnet_cpu\n")
+            f.write("#SBATCH -C cpu\n")
+            f.write("#SBATCH --qos=debug\n")
+            f.write("#SBATCH --nodes=1\n")
+            f.write("#SBATCH --ntasks=1\n")
+            f.write("#SBATCH --cpus-per-task=8\n")
+            f.write("#SBATCH --time=00:30:00\n")
+            f.write("#SBATCH --account=m5068\n")
+            f.write("#SBATCH --output=ffnet_debug_cpu_%j.out\n")
+            f.write("#SBATCH --error=ffnet_debug_cpu_%j.err\n")
+            f.write("\n")
+            f.write("#!/bin/bash" + "\n")
+            f.write("# Load modules" + "\n")
+            f.write("source /etc/profile" + "\n")
+            f.write("source /home/gridsan/$USER/.bashrc" + "\n")
+            f.write("source activate htvs" + "\n")
+            f.write("\n")
+            f.write("export HiTPoly=$HOME/HiTPoly" + "\n")
+            f.write(f"export DATA_PATH={results_path}" + "\n")
+            f.write(f"export NAME=T{simu_temperature}" + "\n")
+            f.write(
+                f"python $HiTPoly/run_analysis_openmm.py -p $DATA_PATH -d {int(prod_run_time/2*3/4)}"
+            )
+            f.write(
+                f" --repeat_units {repeat_units} -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
+                + f" --cat {cation} --ani {anion} --ani_rdf {ani_name_rdf} \n"
+            )
+            
