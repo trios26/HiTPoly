@@ -309,7 +309,7 @@ def create_long_smiles(
                 file.write(f"Cation: {cation}\n")
             print(f"Saved polymer log to {output_path}")
 
-        return final_smiles, total_repeats, monomer_counts
+        return final_smiles, total_repeats
 
     except Exception as e:
         print(f"An error occurred: {e}")
