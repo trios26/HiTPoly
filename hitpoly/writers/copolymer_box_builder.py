@@ -2595,7 +2595,7 @@ def get_concentration_from_molality(
             raise ValueError("For star polymerization, arms must be > 0.")
         repeat_units = max(1, repeat_units // arms)
 
-    long_smiles, _, monomer_counts= create_long_smiles(
+    long_smiles, _ = create_long_smiles(
         save_path=save_path,
         smiles=monomers,
         fractions=fractions,
