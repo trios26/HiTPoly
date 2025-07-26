@@ -309,7 +309,7 @@ def create_long_smiles(
                 file.write(f"Cation: {cation}\n")
             print(f"Saved polymer log to {output_path}")
 
-        return final_smiles, total_repeats
+        return final_smiles, total_repeats, monomer_counts
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -2595,7 +2595,7 @@ def get_concentration_from_molality(
             raise ValueError("For star polymerization, arms must be > 0.")
         repeat_units = max(1, repeat_units // arms)
 
-    long_smiles, _ = create_long_smiles(
+    long_smiles, _, monomer_counts= create_long_smiles(
         save_path=save_path,
         smiles=monomers,
         fractions=fractions,
@@ -2748,6 +2748,9 @@ def get_concentration_from_charge_neutrality(atom_names_long, param_dict, polyme
 
     return [ideal_cation_count, 0], scale_factor
 
+from rdkit import Chem
+import ast
+
 def write_atom_labels_from_log(
     atom_names_file: str,
     log_file: str,
@@ -2776,17 +2779,26 @@ def write_atom_labels_from_log(
             total_atoms = int(line.split("Total number of atoms:")[1].strip())
 
     if architecture not in ["alternating", "block"]:
-        raise NotImplementedError("Only 'alternating' and 'block' architectures are supported.")
+        print("⚠️ Skipping: Unsupported architecture")
+        return
     if not monomer_counts or not final_smiles or not total_atoms:
-        raise ValueError("Missing required fields in log file.")
+        print("⚠️ Skipping: Missing required fields in log file")
+        return
 
     # --- Step 2: Determine heavy atom counts for unique monomers ---
     unique_monomers = list(monomer_counts.keys())
     monomer_id_map = {smi: idx for idx, smi in enumerate(unique_monomers)}
-    heavy_counts = {
-        smi: Chem.MolFromSmiles(smi.replace("[Cu]", "").replace("[Au]", "")).GetNumAtoms()
-        for smi in unique_monomers
-    }
+    heavy_counts = {}
+
+    try:
+        for smi in unique_monomers:
+            mol = Chem.MolFromSmiles(smi.replace("[Cu]", "").replace("[Au]", ""))
+            if mol is None:
+                raise ValueError(f"RDKit failed to parse monomer: {smi}")
+            heavy_counts[smi] = mol.GetNumAtoms()
+    except Exception as e:
+        print(f"⚠️ Skipping RDF label generation due to SMILES error: {e}")
+        return
 
     # --- Step 3: Build label pattern for one chain ---
     label_pattern = [2]  # initial cap
@@ -2824,7 +2836,8 @@ def write_atom_labels_from_log(
     labels = [3] * len(atoms)
     for chain in chains:
         if len(chain) != len(label_pattern):
-            raise ValueError(f"Chain length {len(chain)} != expected pattern length {len(label_pattern)}")
+            print(f"⚠️ Skipping: Chain length {len(chain)} != expected pattern length {len(label_pattern)}")
+            return
         for idx, label in zip(chain, label_pattern):
             labels[idx] = label
 

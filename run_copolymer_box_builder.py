@@ -616,7 +616,7 @@ if __name__ == "__main__":
         "-pi", "--product_index", help="Product index to use for the reaction", default="0"
     )
     parser.add_argument(
-        "-box", "--box_multiplier", help="PBC box size multiplier for packmol", default="3"
+        "-box", "--box_multiplier", help="PBC box size multiplier for packmol", default="5"
     )
     parser.add_argument(
         "-conf", "--enforce_generation", help="Whether to force rdkit to create a conformation", default="False"
