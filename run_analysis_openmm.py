@@ -236,7 +236,7 @@ if __name__ == "__main__":
         "--ani_rdf",
         #default="N,O",
         #not dealing with for now
-        default = "None" 
+        default = "None",
         help="Name of the anion atom for RDF analysis, can input comma separated list, example N,O for two atoms to analyze",
     )
     parser.add_argument(
