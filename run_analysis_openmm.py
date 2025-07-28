@@ -49,8 +49,9 @@ def run(
         ani_names.append([i, "AN" + str(ind + 1)])
     if poly_name:
         poly_names = []
+        #for copolymers P instead of PL!
         for ind, i in enumerate(poly_name):
-            poly_names.append([i, "PL" + str(ind + 1)])
+            poly_names.append([i, "P" + str(ind + 1)])
         atom_name_list = cat_names + ani_names + poly_names
     else:
         poly_names = []
