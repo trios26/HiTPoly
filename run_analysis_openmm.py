@@ -38,7 +38,8 @@ def run(
     poly_name: list = None,
     repeat_units=None,
 ):
-    folder = f"{folder}/results"
+    #folder = f"{folder}/results"
+    folder = f"{folder}"
     pre_folder = folder
 
     cat_names = []
