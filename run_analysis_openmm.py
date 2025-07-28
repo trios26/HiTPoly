@@ -239,7 +239,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--poly",
-        default="O",
+        #default="O",
+        #default="None",
         help="Name of the polymer atom, can input comma separated list, example O,O for two O containing polymers",
     )
     parser.add_argument(
@@ -281,6 +282,9 @@ if __name__ == "__main__":
         args.poly = None
     if args.repeat_units == "None":
         args.repeat_units = None
+#option for poly name None
+    if args.poly == "None":
+        poly_name = None
     else:
         poly_name = args.poly.split(",")
     if args.repeat_units is not None:
