@@ -234,7 +234,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "-a_rdf",
         "--ani_rdf",
-        default="N,O",
+        #default="N,O",
+        #not dealing with for now
+        default = "None" 
         help="Name of the anion atom for RDF analysis, can input comma separated list, example N,O for two atoms to analyze",
     )
     parser.add_argument(
@@ -282,10 +284,12 @@ if __name__ == "__main__":
         poly_name = None
     if args.repeat_units == "None":
         args.repeat_units = None
+    if args.ani_rdf == "None":
+        ani_name_rdf = None
     else:
         poly_name = args.poly.split(",")
-    if args.repeat_units is not None:
         args.repeat_units = int(args.repeat_units)
+        ani_name_rdf = args.ani_rdf.split(",")
     cat_name = args.cat.split(",")
     ani_name = args.ani.split(",")
     ani_name_rdf = args.ani_rdf.split(",")
@@ -294,6 +298,7 @@ if __name__ == "__main__":
         folder=args.folder,
         cat_name=cat_name,
         ani_name=ani_name,
+        ani_name_rdf=ani_name_rdf,
         simu_time=int(args.simu_t),
         diffu_calc_start_time=int(args.diffu_t),
         save_freq=int(args.save_freq),
