@@ -278,6 +278,8 @@ if __name__ == "__main__":
         args.name = None
     if args.poly == "None":
         args.poly = None
+    if args.repeat_units == "None":
+        args.repeat_units == None
     else:
         poly_name = args.poly.split(",")
     if args.repeat_units is not None:
