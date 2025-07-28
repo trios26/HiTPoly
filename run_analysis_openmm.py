@@ -279,7 +279,7 @@ if __name__ == "__main__":
     if args.name == "None":
         args.name = None
     if args.poly == "None":
-        args.poly = None
+        args.poly_name = None
     if args.repeat_units == "None":
         args.repeat_units = None
 #option for poly name None
