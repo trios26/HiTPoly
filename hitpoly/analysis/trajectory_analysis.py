@@ -21,7 +21,7 @@ ELEC = 1.60217662 * (1e-19)  # C
 KB = 1.3806452e-23  # J/K
 
 #latex failing on perlmutter trying to set to False
-plt.rc("text", usetex=False)
+plt.rc("text", usetex=True)
 plt.rc("font", family="serif")
 
 matplotlib.rcParams["pdf.fonttype"] = 42
