@@ -1,4 +1,4 @@
-from ffnet.analysis.trajectory_analysis import (
+from hitpoly.analysis.trajectory_analysis import (
     get_coords_PDB_msd,
     get_coords_PDB_rdf_openmm,
     unwrap_all,
@@ -9,7 +9,7 @@ from ffnet.analysis.trajectory_analysis import (
     plot_calc_rdf,
     save_gromacs_params,
 )
-from ffnet.analysis.coordination_analysis import (
+from hitpoly.analysis.coordination_analysis import (
     get_structure_list,
     get_coord_environment_convex,
     return_atomtypes_numberneighbors,
