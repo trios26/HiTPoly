@@ -51,7 +51,7 @@ def run(
     ani_names = []
     #change AN to P for single ion conductor
     for ind, i in enumerate(ani_name):
-        ani_names.append([i, "P" + str(ind + 1)])
+        ani_names.append([i, "AN" + str(ind + 1)])
     if poly_name:
         poly_names = []
         for ind, i in enumerate(poly_name):
