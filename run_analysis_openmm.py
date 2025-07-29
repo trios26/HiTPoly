@@ -1,4 +1,4 @@
-from hitpoly.analysis.trajectory_analysis import (
+from hitpoly.analysis.trajectory_analysis_copolymer import (
     get_coords_PDB_msd,
     get_coords_PDB_rdf_openmm,
     unwrap_all,
