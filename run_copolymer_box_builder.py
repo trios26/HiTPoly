@@ -57,7 +57,7 @@ def run(
     # Set default paths if not provided
     home_dir = os.path.expanduser("~")
     if results_path is None:
-        results_path = os.path.join(home_dir, "results")
+        results_path = os.path.join(home_dir, "results_393")
     if final_path is None:
         final_path = os.path.join(results_path, "final_results")
     if hitpoly_path is None:
