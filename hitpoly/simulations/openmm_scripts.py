@@ -1233,4 +1233,214 @@ def write_analysis_script(
                 f" --repeat_units {repeat_units} -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
                 + f" --cat {cation} --ani {anion} --ani_rdf {ani_name_rdf} \n"
             )
-            
+
+##New
+def tg_simulation(
+    prod_run_time,   # ns
+    start_temperature,
+    end_temperature,
+    temperature_step,
+    save_path,
+    initial_pdb,
+    forcefield_files,
+    platform,
+    xyz_output=False,
+):
+    """
+    Tg scan protocol using OpenMM, including a two-step equilibration
+    followed by the original 11-stage NPT relaxations and temperature scan.
+
+    Parameters:
+    - prod_run_time: production run time in ns
+    - start_temperature, end_temperature, temperature_step: K values for scan
+    - save_path: directory for outputs
+    - initial_pdb: path to packed_box.pdb
+    - forcefield_files: list of ForceField XML filenames
+    - platform: OpenMM Platform object
+    - xyz_output: whether to write .xyz files
+    """
+    # 1) create directories
+    final_save_path = os.path.join(save_path, "openmm_saver")
+    if not os.path.isdir(final_save_path):
+        os.makedirs(final_save_path)
+        print(f"Created directory: {final_save_path}")
+
+    # 2) standard equilibration scheme (pre-existing functions)
+    equilibrate_system_1(
+        save_path=save_path,
+        final_save_path=final_save_path,
+        simu_temp=start_temperature,
+        simu_pressure=1,
+    )
+    equilibrate_system_2(
+        save_path=save_path,
+        final_save_path=final_save_path,
+        simu_temp=start_temperature,
+        simu_pressure=1,
+    )
+
+    # Load minimized & equilibrated box
+    pdb = PDBFile(initial_pdb)
+    ff = ForceField(*forcefield_files)
+    modeller = Modeller(pdb.topology, pdb.positions)
+    topology = modeller.topology
+    last_positions = modeller.positions
+    file_names = []
+
+    # 3) Original NPT relaxation stages (11 runs × 2 ns)
+    t1 = 400
+    temps = [t1+70, t1+70, t1+20, t1+20, t1, t1+20, t1, t1+20, t1, t1+20, t1]
+    pressures = [1, 100, 1, 100, 1, 1, 1, 1, 1, 1, 1]
+    names = [f"npt{i+1}" for i in range(len(temps))]
+    for ind, (temp, pres, name) in enumerate(zip(temps, pressures, names)):
+        dt = 1.0 if temp > 700 else 2.0
+        # build system + barostat
+        system = ff.createSystem(
+            topology,
+            nonbondedMethod=PME,
+            nonbondedCutoff=1.0*nanometer,
+            constraints=HBonds,
+        )
+        barostat = MonteCarloBarostat(pres*bar, temp*kelvin, MonteCarloAnisotropicBarostat)
+        system.addForce(barostat)
+        integrator = NoseHooverIntegrator(
+            temp*kelvin,
+            1.0/picosecond,
+            dt*femtoseconds,
+        )
+        sim = Simulation(topology, system, integrator, platform)
+        sim.context.setPositions(last_positions)
+        interval = int((1.0*picosecond)/(dt*femtoseconds))
+        sim.reporters.append(DCDReporter(f"{save_path}/{name}.dcd", interval))
+        sim.reporters.append(
+            StateDataReporter(
+                f"{save_path}/{name}.log", interval,
+                step=True, time=True, potentialEnergy=True,
+                temperature=True, volume=True
+            )
+        )
+        sim.step(int(2e6 / dt))  # 2 ns
+        state = sim.context.getState(getPositions=True)
+        with open(f"{save_path}/{name}.pdb", 'w') as f:
+            PDBFile.writeFile(sim.topology, state.getPositions(), f)
+        last_positions = state.getPositions()
+        file_names.append(name)
+
+    # 4) Production NPT temperature scan (extra 10 ns on first)
+    scan_temps = np.arange(end_temperature, start_temperature+1, temperature_step)[::-1]
+    for idx, T in enumerate(scan_temps):
+        run_time = prod_run_time + 10 if idx == 0 else prod_run_time
+        name = f"npt_prod_T{int(T)}"
+        dt = 1.0 if T > 700 else 2.0
+        system = ff.createSystem(
+            topology,
+            nonbondedMethod=PME,
+            nonbondedCutoff=1.0*nanometer,
+            constraints=HBonds,
+        )
+        barostat = MonteCarloBarostat(1*bar, T*kelvin, MonteCarloAnisotropicBarostat)
+        system.addForce(barostat)
+        integrator = NoseHooverIntegrator(
+            T*kelvin,
+            1.0/picosecond,
+            dt*femtoseconds,
+        )
+        sim = Simulation(topology, system, integrator, platform)
+        sim.context.setPositions(last_positions)
+        interval = int((1.0*picosecond)/(dt*femtoseconds))
+        sim.reporters.append(DCDReporter(f"{save_path}/{name}.dcd", interval))
+        sim.reporters.append(
+            StateDataReporter(
+                f"{save_path}/{name}.log", interval,
+                step=True, time=True, potentialEnergy=True,
+                temperature=True, volume=True
+            )
+        )
+        if xyz_output:
+            sim.reporters.append(PDBReporter(f"{save_path}/{name}.xyz", interval))
+        sim.step(int(run_time * 1e6 / dt))
+        state = sim.context.getState(getPositions=True)
+        with open(f"{save_path}/{name}.pdb", 'w') as f:
+            PDBFile.writeFile(sim.topology, state.getPositions(), f)
+        last_positions = state.getPositions()
+        file_names.append(name)
+
+            print("Tg simulation complete — stages:", file_names)
+
+    # 5) Run Tg analysis on the production data
+    try:
+        Tg_value = analyze_tg(
+            save_path=save_path,
+            temperatures=scan_temps,
+        )
+        print(f"Glass transition temperature (Tg) estimate: {Tg_value:.1f} K")
+    except Exception as e:
+        print(f"Tg analysis failed: {e}")
+
+
+def analyze_tg(
+    save_path,
+    temperatures,
+    discard_fraction=0.5,
+    fit_ranges=None,
+    output_plot="tg_analysis.png",
+):
+    """
+    Analyze Tg from NPT production runs.
+
+    Parameters:
+    - save_path: directory where log files are stored
+    - temperatures: list of temperatures (K) corresponding to npt_prod_T{T}.log files
+    - discard_fraction: fraction of initial data to discard for equilibration
+    - fit_ranges: tuple of two tuples defining low-T and high-T fit ranges, e.g. ((300,350),(700,800))
+    - output_plot: filename for saving the density vs temperature plot
+
+    Returns:
+    - Tg_estimate: estimated Tg in K
+    """
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    # Collect mean densities
+    data = []
+    for T in temperatures:
+        logfile = os.path.join(save_path, f"npt_prod_T{int(T)}.log")
+        df = pd.read_csv(logfile, sep=" ", comment='#', skipinitialspace=True)
+        if 'density' not in df.columns:
+            raise ValueError(f"Density column not found in {logfile}")
+        # discard initial frames
+        n = len(df)
+        df2 = df.iloc[int(n*discard_fraction):]
+        mean_rho = df2['density'].mean()
+        data.append((T, mean_rho))
+    df_data = pd.DataFrame(data, columns=['T','density'])
+    df_data['spec_vol'] = 1.0/df_data['density']
+
+    # Fit linear regimes
+    if fit_ranges is None:
+        low_range = (df_data['T'].min(), df_data['T'].min() + (df_data['T'].max()-df_data['T'].min())/3)
+        high_range = (df_data['T'].max() - (df_data['T'].max()-df_data['T'].min())/3, df_data['T'].max())
+    else:
+        low_range, high_range = fit_ranges
+    low_df = df_data[(df_data['T'] >= low_range[0]) & (df_data['T'] <= low_range[1])]
+    high_df = df_data[(df_data['T'] >= high_range[0]) & (df_data['T'] <= high_range[1])]
+    m1, b1 = np.polyfit(high_df['T'], high_df['spec_vol'], 1)
+    m2, b2 = np.polyfit(low_df['T'],  low_df['spec_vol'], 1)
+    # Intersection
+    Tg = (b2 - b1) / (m1 - m2)
+
+    # Plot
+    plt.figure()
+    plt.scatter(df_data['T'], df_data['spec_vol'], label='Data')
+    xs = np.linspace(df_data['T'].min(), df_data['T'].max(), 100)
+    plt.plot(xs, m1*xs + b1, '--', label='High-T fit')
+    plt.plot(xs, m2*xs + b2, '--', label='Low-T fit')
+    plt.axvline(Tg, color='k', linestyle=':', label=f'Tg = {Tg:.1f} K')
+    plt.xlabel('Temperature (K)')
+    plt.ylabel('Specific Volume (1/density)')
+    plt.legend()
+    plt.savefig(os.path.join(save_path, output_plot))
+    plt.close()
+
+    print(f"Estimated Tg = {Tg:.1f} K")
+    return Tg
+
