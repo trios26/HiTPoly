@@ -10,9 +10,13 @@ from hitpoly.simulations.openmm_scripts import (
     equilibrate_system_2,
     prod_run_nvt,
     write_analysis_script,
+    tg_simulations,
+    analyze_tg_results,
 )
 from distutils.dir_util import copy_tree
 import sys
+import matplotlib.pyplot as plt
+import MDAnalysis as mda
 
 sys.setrecursionlimit(5000)
 
@@ -511,37 +515,43 @@ def run(
     if not os.path.isdir(final_save_path):
         os.makedirs(final_save_path)
 
+    if simu_type == "conductivity":
     
-    equilibrate_system_1(
-        save_path=save_path,
-        final_save_path=final_save_path,
-    )
+        equilibrate_system_1(
+            save_path=save_path,
+            final_save_path=final_save_path,
+        )
+    
+        equilibrate_system_2(
+            save_path=save_path,
+            final_save_path=final_save_path,
+        )
+    
+        prod_run_nvt(
+            save_path=save_path,
+            final_save_path=final_save_path,
+            simu_temp=simu_temp,
+            simu_time=simu_length,
+        )
+    
+        write_analysis_script(
+            save_path=save_path,
+            results_path=results_path,
+            repeat_units=repeats,
+            cation=cation,
+            anion=anion,
+            platform=platform,
+            simu_temperature=simu_temp,
+            prod_run_time=simu_length,
+            xyz_output=25,
+            ani_name_rdf=None
+        )
 
-    equilibrate_system_2(
-        save_path=save_path,
-        final_save_path=final_save_path,
+    elif simu_type == "tg":
+        tg_simulations(
+            save_path=save_path,
+            final_save_path=final_save_path,
     )
-
-    prod_run_nvt(
-        save_path=save_path,
-        final_save_path=final_save_path,
-        simu_temp=simu_temp,
-        simu_time=simu_length,
-    )
-
-    write_analysis_script(
-        save_path=save_path,
-        results_path=results_path,
-        repeat_units=repeats,
-        cation=cation,
-        anion=anion,
-        platform=platform,
-        simu_temperature=simu_temp,
-        prod_run_time=simu_length,
-        xyz_output=25,
-        ani_name_rdf=None
-    )
-
 
 
 #Parse args
