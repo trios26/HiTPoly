@@ -22,7 +22,7 @@ from openmm import (
 from openmm.unit import *
 
 
-def iniatilize_simulation(
+def initialize_simulation(
     save_path,
     final_save_path,
     temperature,
@@ -248,7 +248,7 @@ def equilibrate_polymer(
     name="polymer_conformation",
 ):
     integrator, barostat, barostat_id, simulation, system, modeller = (
-        iniatilize_simulation(
+        initialize_simulation(
             save_path=save_path,
             final_save_path=save_path,
             temperature=10,
@@ -282,7 +282,7 @@ def equilibrate_system_1(
     fraction_froze=None,
 ):
     integrator, barostat, barostat_id, simulation, system, modeller = (
-        iniatilize_simulation(
+        initialize_simulation(
             save_path=save_path,
             final_save_path=final_save_path,
             temperature=10,
@@ -394,7 +394,7 @@ def equilibrate_system_2(
     fraction_froze=None,
 ):
     integrator, barostat, barostat_id, simulation, system, modeller = (
-        iniatilize_simulation(
+        initialize_simulation(
             save_path=save_path,
             final_save_path=final_save_path,
             temperature=simu_temp,
@@ -635,7 +635,7 @@ def equilibrate_system_liquid1(
     fraction_froze=None,
 ):
     integrator, barostat, barostat_id, simulation, system, modeller = (
-        iniatilize_simulation(
+        initialize_simulation(
             save_path=save_path,
             final_save_path=final_save_path,
             temperature=10,
@@ -761,7 +761,7 @@ def equilibrate_system_liquid2(
     For liquids, we do not need to use high pressure equilibration. So simply run NPT at 1 bar for sufficient time.
     """
     integrator, barostat, barostat_id, simulation, system, modeller = (
-        iniatilize_simulation(
+        initialize_simulation(
             save_path=save_path,
             final_save_path=final_save_path,
             temperature=simu_temp,
@@ -901,7 +901,7 @@ def equilibrate_system_IR(
     timestep=0.001,
 ):
     integrator, barostat, barostat_id, simulation, system, modeller = (
-        iniatilize_simulation(
+        initialize_simulation(
             save_path=save_path,
             final_save_path=final_save_path,
             temperature=simu_temp,
@@ -1072,7 +1072,7 @@ def prod_run_nvt(
     fraction_froze=None,
 ):
     integrator, barostat, barostat_id, simulation, system, modeller = (
-        iniatilize_simulation(
+        initialize_simulation(
             save_path=save_path,
             final_save_path=final_save_path,
             temperature=simu_temp,
@@ -1235,212 +1235,142 @@ def write_analysis_script(
             )
 
 ##New
-def tg_simulation(
-    prod_run_time,   # ns
-    start_temperature,
-    end_temperature,
-    temperature_step,
-    save_path,
-    initial_pdb,
-    forcefield_files,
-    platform,
-    xyz_output=False,
+def tg_simulations(
+    save_path: str,
+    final_save_path: str,
+    prod_run_time: float,      # production run time in ns
+    start_temperature: float,  # high temperature boundary in K
+    end_temperature: float,    # low temperature boundary in K
+    temperature_step: float    # temperature step in K
 ):
     """
-    Tg scan protocol using OpenMM, including a two-step equilibration
-    followed by the original 11-stage NPT relaxations and temperature scan.
+    Perform Tg simulation temperature/pressure sweeps in OpenMM,
+    mirroring the GROMACS scheme from ACS Appl. Polym. Mater. 2021 and ACS Macro Lett. 2023.
 
-    Parameters:
-    - prod_run_time: production run time in ns
-    - start_temperature, end_temperature, temperature_step: K values for scan
-    - save_path: directory for outputs
-    - initial_pdb: path to packed_box.pdb
-    - forcefield_files: list of ForceField XML filenames
-    - platform: OpenMM Platform object
-    - xyz_output: whether to write .xyz files
+    Steps:
+    1. Energy relaxation
+    2. Short NPT conditioning cycles
+    3. Production NPT runs scanning temperatures
+    4. Analysis of density vs temperature
     """
-    # 1) create directories
-    final_save_path = os.path.join(save_path, "openmm_saver")
-    if not os.path.isdir(final_save_path):
-        os.makedirs(final_save_path)
-        print(f"Created directory: {final_save_path}")
+    os.makedirs(save_path, exist_ok=True)
+    os.makedirs(final_save_path, exist_ok=True)
 
-    # 2) standard equilibration scheme (pre-existing functions)
-    equilibrate_system_1(
-        save_path=save_path,
-        final_save_path=final_save_path,
-        simu_temp=start_temperature,
-        simu_pressure=1,
-    )
-    equilibrate_system_2(
-        save_path=save_path,
-        final_save_path=final_save_path,
-        simu_temp=start_temperature,
-        simu_pressure=1,
-    )
+    # 1. Energy relaxation
+    print("Starting energy relaxation...")
+    equilibrate_system_1(save_path=save_path, final_save_path=final_save_path)
+    equilibrate_system_2(save_path=save_path, final_save_path=final_save_path)
 
-    # Load minimized & equilibrated box
-    pdb = PDBFile(initial_pdb)
-    ff = ForceField(*forcefield_files)
-    modeller = Modeller(pdb.topology, pdb.positions)
-    topology = modeller.topology
-    last_positions = modeller.positions
-    file_names = []
-
-    # 3) Original NPT relaxation stages (11 runs × 2 ns)
-    t1 = 400
-    temps = [t1+70, t1+70, t1+20, t1+20, t1, t1+20, t1, t1+20, t1, t1+20, t1]
+    # 2. Short NPT conditioning cycles around t1
+    t1 = start_temperature
+    temps = [t1 + 70, t1 + 70, t1 + 20, t1 + 20, t1,
+             t1 + 20, t1, t1 + 20, t1, t1 + 20, t1]
     pressures = [1, 100, 1, 100, 1, 1, 1, 1, 1, 1, 1]
-    names = [f"npt{i+1}" for i in range(len(temps))]
-    for ind, (temp, pres, name) in enumerate(zip(temps, pressures, names)):
-        dt = 1.0 if temp > 700 else 2.0
-        # build system + barostat
-        system = ff.createSystem(
-            topology,
-            nonbondedMethod=PME,
-            nonbondedCutoff=1.0*nanometer,
-            constraints=HBonds,
-        )
-        barostat = MonteCarloBarostat(pres*bar, temp*kelvin, MonteCarloAnisotropicBarostat)
-        system.addForce(barostat)
-        integrator = NoseHooverIntegrator(
-            temp*kelvin,
-            1.0/picosecond,
-            dt*femtoseconds,
-        )
-        sim = Simulation(topology, system, integrator, platform)
-        sim.context.setPositions(last_positions)
-        interval = int((1.0*picosecond)/(dt*femtoseconds))
-        sim.reporters.append(DCDReporter(f"{save_path}/{name}.dcd", interval))
-        sim.reporters.append(
-            StateDataReporter(
-                f"{save_path}/{name}.log", interval,
-                step=True, time=True, potentialEnergy=True,
-                temperature=True, volume=True
+    print("Running short NPT conditioning cycles...")
+    for i, (temp, pres) in enumerate(zip(temps, pressures)):
+        print(f" Cycle {i+1}: T={temp} K, P={pres} bar")
+        integrator, barostat, barostat_id, simulation, system, modeller = \
+            initialize_simulation(
+                save_path=save_path,
+                final_save_path=final_save_path,
+                temperature=temp,
+                pressure=pres,
+                equilibration=True,
+                barostat=True,
+                timestep=0.001
             )
+        # 2 ps at 1 fs timestep => 2000 steps
+        npt_run(
+            integrator, simulation,
+            simu_time=2000,
+            temperature=temp * unit.kelvin,
+            pressure=pres * unit.bar,
+            barostat=barostat
         )
-        sim.step(int(2e6 / dt))  # 2 ns
-        state = sim.context.getState(getPositions=True)
-        with open(f"{save_path}/{name}.pdb", 'w') as f:
-            PDBFile.writeFile(sim.topology, state.getPositions(), f)
-        last_positions = state.getPositions()
-        file_names.append(name)
+        # save state & box
+        state = simulation.context.getState(
+            getPositions=True, getVelocities=True, getParameters=True
+        )
+        xml_out = os.path.join(final_save_path, f"state_cycle_{i+1}.xml")
+        with open(xml_out, 'w') as f:
+            f.write(XmlSerializer.serialize(state))
+        pos = state.getPositions()
+        PDBFile.writeFile(
+            modeller.topology, pos,
+            open(os.path.join(save_path, f"box_cycle_{i+1}.pdb"), 'w')
+        )
 
-    # 4) Production NPT temperature scan (extra 10 ns on first)
-    scan_temps = np.arange(end_temperature, start_temperature+1, temperature_step)[::-1]
+    # 3. Production NPT runs scanning temperature
+    print("Running production NPT runs...")
+    scan_temps = np.arange(end_temperature, start_temperature + 1, temperature_step)[::-1]
     for idx, T in enumerate(scan_temps):
-        run_time = prod_run_time + 10 if idx == 0 else prod_run_time
-        name = f"npt_prod_T{int(T)}"
-        dt = 1.0 if T > 700 else 2.0
-        system = ff.createSystem(
-            topology,
-            nonbondedMethod=PME,
-            nonbondedCutoff=1.0*nanometer,
-            constraints=HBonds,
-        )
-        barostat = MonteCarloBarostat(1*bar, T*kelvin, MonteCarloAnisotropicBarostat)
-        system.addForce(barostat)
-        integrator = NoseHooverIntegrator(
-            T*kelvin,
-            1.0/picosecond,
-            dt*femtoseconds,
-        )
-        sim = Simulation(topology, system, integrator, platform)
-        sim.context.setPositions(last_positions)
-        interval = int((1.0*picosecond)/(dt*femtoseconds))
-        sim.reporters.append(DCDReporter(f"{save_path}/{name}.dcd", interval))
-        sim.reporters.append(
-            StateDataReporter(
-                f"{save_path}/{name}.log", interval,
-                step=True, time=True, potentialEnergy=True,
-                temperature=True, volume=True
+        print(f" Prod cycle {idx+1}: T={T} K")
+        integrator, barostat, barostat_id, simulation, system, modeller = \
+            initialize_simulation(
+                save_path=save_path,
+                final_save_path=final_save_path,
+                temperature=T,
+                pressure=1,
+                equilibration=True,
+                barostat=True,
+                timestep=0.002
             )
+        extra_ps = 10000 if idx == 0 else 0
+        total_ps = prod_run_time * 1000 + extra_ps
+        npt_run(
+            integrator, simulation,
+            simu_time=total_ps / 0.002,
+            temperature=T * unit.kelvin,
+            pressure=1 * unit.bar,
+            barostat=barostat
         )
-        if xyz_output:
-            sim.reporters.append(PDBReporter(f"{save_path}/{name}.xyz", interval))
-        sim.step(int(run_time * 1e6 / dt))
-        state = sim.context.getState(getPositions=True)
-        with open(f"{save_path}/{name}.pdb", 'w') as f:
-            PDBFile.writeFile(sim.topology, state.getPositions(), f)
-        last_positions = state.getPositions()
-        file_names.append(name)
-
-            print("Tg simulation complete — stages:", file_names)
-
-    # 5) Run Tg analysis on the production data
-    try:
-        Tg_value = analyze_tg(
-            save_path=save_path,
-            temperatures=scan_temps,
+        state = simulation.context.getState(
+            getPositions=True, getVelocities=True, getParameters=True
         )
-        print(f"Glass transition temperature (Tg) estimate: {Tg_value:.1f} K")
-    except Exception as e:
-        print(f"Tg analysis failed: {e}")
+        xml_out = os.path.join(save_path, f"state_prod_T{int(T)}.xml")
+        with open(xml_out, 'w') as f:
+            f.write(XmlSerializer.serialize(state))
+        pos = state.getPositions()
+        PDBFile.writeFile(
+            modeller.topology, pos,
+            open(os.path.join(save_path, f"box_prod_T{int(T)}.pdb"), 'w')
+        )
+
+    print("Tg simulation completed. All states and PDBs saved.")
+
+    # 4. Analyze results automatically
+    analyze_tg_results(final_save_path)
 
 
-def analyze_tg(
-    save_path,
-    temperatures,
-    discard_fraction=0.5,
-    fit_ranges=None,
-    output_plot="tg_analysis.png",
+def analyze_tg_results(
+    final_save_path: str,
+    output_plot: str = "density_vs_temp.png"
 ):
     """
-    Analyze Tg from NPT production runs.
-
-    Parameters:
-    - save_path: directory where log files are stored
-    - temperatures: list of temperatures (K) corresponding to npt_prod_T{T}.log files
-    - discard_fraction: fraction of initial data to discard for equilibration
-    - fit_ranges: tuple of two tuples defining low-T and high-T fit ranges, e.g. ((300,350),(700,800))
-    - output_plot: filename for saving the density vs temperature plot
-
-    Returns:
-    - Tg_estimate: estimated Tg in K
+    Analyze Tg simulation results by extracting densities from production boxes
+    and plotting density vs temperature to identify Tg.
     """
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    # Collect mean densities
-    data = []
-    for T in temperatures:
-        logfile = os.path.join(save_path, f"npt_prod_T{int(T)}.log")
-        df = pd.read_csv(logfile, sep=" ", comment='#', skipinitialspace=True)
-        if 'density' not in df.columns:
-            raise ValueError(f"Density column not found in {logfile}")
-        # discard initial frames
-        n = len(df)
-        df2 = df.iloc[int(n*discard_fraction):]
-        mean_rho = df2['density'].mean()
-        data.append((T, mean_rho))
-    df_data = pd.DataFrame(data, columns=['T','density'])
-    df_data['spec_vol'] = 1.0/df_data['density']
-
-    # Fit linear regimes
-    if fit_ranges is None:
-        low_range = (df_data['T'].min(), df_data['T'].min() + (df_data['T'].max()-df_data['T'].min())/3)
-        high_range = (df_data['T'].max() - (df_data['T'].max()-df_data['T'].min())/3, df_data['T'].max())
-    else:
-        low_range, high_range = fit_ranges
-    low_df = df_data[(df_data['T'] >= low_range[0]) & (df_data['T'] <= low_range[1])]
-    high_df = df_data[(df_data['T'] >= high_range[0]) & (df_data['T'] <= high_range[1])]
-    m1, b1 = np.polyfit(high_df['T'], high_df['spec_vol'], 1)
-    m2, b2 = np.polyfit(low_df['T'],  low_df['spec_vol'], 1)
-    # Intersection
-    Tg = (b2 - b1) / (m1 - m2)
-
-    # Plot
+    temps = []
+    densities = []
+    for fname in os.listdir(final_save_path):
+        if fname.startswith("box_prod_T") and fname.endswith(".pdb"):
+            T = int(fname.replace("box_prod_T", "").replace(".pdb", ""))
+            u = mda.Universe(os.path.join(final_save_path, fname))
+            dims = u.atoms.dimensions
+            vol_ang3 = dims[0] * dims[1] * dims[2]
+            mass_amu = sum(atom.mass for atom in u.atoms)
+            density = (mass_amu * 1.66054e-24) / (vol_ang3 * 1e-24)
+            temps.append(T)
+            densities.append(density)
+    temps, densities = zip(*sorted(zip(temps, densities)))
     plt.figure()
-    plt.scatter(df_data['T'], df_data['spec_vol'], label='Data')
-    xs = np.linspace(df_data['T'].min(), df_data['T'].max(), 100)
-    plt.plot(xs, m1*xs + b1, '--', label='High-T fit')
-    plt.plot(xs, m2*xs + b2, '--', label='Low-T fit')
-    plt.axvline(Tg, color='k', linestyle=':', label=f'Tg = {Tg:.1f} K')
-    plt.xlabel('Temperature (K)')
-    plt.ylabel('Specific Volume (1/density)')
-    plt.legend()
-    plt.savefig(os.path.join(save_path, output_plot))
-    plt.close()
+    plt.plot(temps, densities, marker='o')
+    plt.xlabel("Temperature (K)")
+    plt.ylabel("Density (g/cm³)")
+    plt.title("Density vs Temperature")
+    plt.tight_layout()
+    output_path = os.path.join(final_save_path, output_plot)
+    plt.savefig(output_path)
+    print(f"Density vs Temperature plot saved to {output_path}")
 
-    print(f"Estimated Tg = {Tg:.1f} K")
-    return Tg
 
