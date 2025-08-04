@@ -651,7 +651,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-nb", "--num_blocks", type=int, help="Number of blocks for block polymerization", default= "None"
+        "-nb", "--num_blocks", type=int, help="Number of blocks for block polymerization", default= "4"
     )
 
     parser.add_argument(
