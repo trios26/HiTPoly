@@ -1242,7 +1242,7 @@ def tg_simulations(
     start_temperature=450.0,
     end_temperature=200.0,
     temperature_step=25.0
-)
+):
     """
     Perform Tg simulation temperature/pressure sweeps in OpenMM,
     mirroring the GROMACS scheme from ACS Appl. Polym. Mater. 2021 and ACS Macro Lett. 2023.
