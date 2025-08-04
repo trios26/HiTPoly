@@ -1236,13 +1236,13 @@ def write_analysis_script(
 
 ##New
 def tg_simulations(
-    save_path: str,
-    final_save_path: str,
-    prod_run_time: float,      # production run time in ns
-    start_temperature: float,  # high temperature boundary in K
-    end_temperature: float,    # low temperature boundary in K
-    temperature_step: float    # temperature step in K
-):
+    save_path,
+    final_save_path,
+    prod_run_time=5.0, #nanoseconds
+    start_temperature=450.0,
+    end_temperature=200.0,
+    temperature_step=25.0
+)
     """
     Perform Tg simulation temperature/pressure sweeps in OpenMM,
     mirroring the GROMACS scheme from ACS Appl. Polym. Mater. 2021 and ACS Macro Lett. 2023.
