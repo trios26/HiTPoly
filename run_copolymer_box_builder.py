@@ -16,7 +16,6 @@ from hitpoly.simulations.openmm_scripts import (
 from distutils.dir_util import copy_tree
 import sys
 import matplotlib.pyplot as plt
-import MDAnalysis as mda
 
 sys.setrecursionlimit(5000)
 
