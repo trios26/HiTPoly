@@ -754,7 +754,7 @@ if __name__ == "__main__":
         simu_temp=int(args.temperature),
         simu_length=int(args.simu_length),
         platform=args.platform,
-        num_blocks=args.num_blocks, 
+        num_blocks=num_blocks, 
         arms=int(args.arms),
         blend_mode = args.blend_mode.lower() == "true",
         polymer_chain_length=int(args.polymer_chain_length),
