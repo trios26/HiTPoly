@@ -720,7 +720,7 @@ if __name__ == "__main__":
     monomer2 = None if args.monomer2 == "None" else args.monomer2
     monomer3 = None if args.monomer3 == "None" else args.monomer3
 
-    num_blocks = None if args.num_blocks == "None" else args.num_blocks
+    num_blocks = None if args.num_blocks == "None" else int(args.num_blocks)
 
     # Run the function with parsed arguments
     run(
