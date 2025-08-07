@@ -710,6 +710,12 @@ if __name__ == "__main__":
     else:
         args.salt = True
 
+    if args.num_blocks == "None":
+        num_blocks = None
+    else:
+        num_blocks = int(args.num_blocks)
+
+
     # Convert paths to None if "None" is provided
     hitpoly_path = None if args.hitpoly_path == "None" else args.hitpoly_path
     htvs_path = None if args.htvs_path == "None" else args.htvs_path
@@ -720,7 +726,7 @@ if __name__ == "__main__":
     monomer2 = None if args.monomer2 == "None" else args.monomer2
     monomer3 = None if args.monomer3 == "None" else args.monomer3
 
-    num_blocks = None if args.num_blocks == "None" else int(args.num_blocks)
+    
 
     # Run the function with parsed arguments
     run(
