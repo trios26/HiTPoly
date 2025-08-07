@@ -1238,7 +1238,7 @@ def write_analysis_script(
 def tg_simulations(
     save_path,
     final_save_path,
-    prod_run_time=5.0, #nanoseconds
+    prod_run_time=5.0,  # nanoseconds
     start_temperature=450.0,
     end_temperature=200.0,
     temperature_step=25.0
@@ -1283,11 +1283,11 @@ def tg_simulations(
         npt_run(
             integrator, simulation,
             simu_time=2000,
-            temperature=temp * unit.kelvin,
-            pressure=pres * unit.bar,
+            temperature=temp * kelvin,
+            pressure=pres * bar,
             barostat=barostat
         )
-        # save state & box
+        # Save state & box
         state = simulation.context.getState(
             getPositions=True, getVelocities=True, getParameters=True
         )
@@ -1320,8 +1320,8 @@ def tg_simulations(
         npt_run(
             integrator, simulation,
             simu_time=total_ps / 0.002,
-            temperature=T * unit.kelvin,
-            pressure=1 * unit.bar,
+            temperature=T * kelvin,
+            pressure=1 * bar,
             barostat=barostat
         )
         state = simulation.context.getState(
@@ -1340,6 +1340,7 @@ def tg_simulations(
 
     # 4. Analyze results automatically
     analyze_tg_results(final_save_path)
+
 
 
 def analyze_tg_results(
