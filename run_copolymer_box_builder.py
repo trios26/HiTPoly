@@ -73,9 +73,10 @@ def run(
     #packmol_path = "/home/trios/packmol-20.14.4/packmol"
 
     htvs_details = {
-        "geom_config_name": "nvt_conf_generation_ligpargen_lammps"
+        "geom_config_name": "nvt_conf_generation_ligpargen_lammps",
+        "calc_method_name": "dft_wb97xd3_def2tzvp",
+        "species_group_name": "singleion_trios", 
     }
-    # htvs_details["geom_config_name"] = "nvt_conf_generation_ligpargen_lammps"
 
     # Define a dictionary to map atomic numbers to atomic symbols
     number_to_symbol = {
@@ -434,19 +435,23 @@ def run(
     print(f"Angles (Long Molecules): {all_angles}")
 
     if single_ion_conductor:
-        print("Using DFT-aware charge neutrality logic based on atom types and DFT charges...")
-        # Load your data from a CSV or manually as a DataFrame
-        df_dft_charges = pd.read_csv(os.path.expanduser("~/06272025_artur/type_charge_outputs/61919838_type_charge.csv"))  # or construct from your list
-
-        # Patch the param_dict
-        param_dict = average_dft_charges_and_update_param_dict(
-            dft_charge_data=df_dft_charges,
-            original_param_dict=combined_param_dict
+        #This works for homopolymer just pull the one smiles from oligomer list
+        my_smiles=oligomers_list[0]
+    
+        #patch the parameter dictionary with the updated charges from dft
+        patched_param_dict = patch_params_with_dft_charges_from_db(
+            smiles=my_smiles,
+            original_param_dict=combined_param_dict,
+            htvs_path=htvs_path,
+            htvs_details=htvs_details
         )
-
-        # Count the number of anionic groups in one polymer from the SMILES
+        
+        #reset parm_dict to patched!
+        param_dict = patched_param_dict
+    
+        # Count the number of anionic [N-] groups in one polymer from the SMILES
         n_anions_per_polymer = long_smiles_list[0].count(f"[{anion}-]")
-
+    
         concentration, _ = get_concentration_from_charge_neutrality(
             atom_names_long=all_atom_names_long,
             param_dict=param_dict,
