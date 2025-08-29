@@ -40,6 +40,37 @@ import itertools
 from openmm.app import PDBFile
 import ast
 
+import django
+# replace with your own path
+sys.path.append('/home/trios/htvs/djangochem')
+sys.path.append('/home/trios/htvs')
+
+os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+django.setup()
+
+# django imports 
+from django.contrib.admin.models import LogEntry
+from django.contrib.auth.models import Group, Permission, User
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.sessions.models import Session
+from docking.models import Affinity, AffinityType, Complex, ComplexSet
+from experiments.models import ArticleReference, ComponentRole, Composition, Conversion, DBReference, Experiment, FluorescenceSpectrum, FluorescenceSummary, Measurement, Sample, Substance, SubstanceName, UVVisSpectrum, UVVisSummary, Unit
+from features.models import AtomDescriptor, BondDescriptor, ConnectivityMatrix, DistanceMatrix, ProximityMatrix, SpeciesDescriptor, ThreeDBinaryFingerprint, ThreeDContinuousFingerprint, ThreeDFingerprintMethod, TrainingSet, Transformation, TwoDFingerprint, TwoDFingerprintMethod
+#from guardian.models.models import GroupObjectPermission, UserObjectPermission
+from jobs.models import Job, JobConfig, WorkBatch
+from neuralnet.models import ActiveLearningLoop, Dataset, NetArchitecture, NetCommunity, NetFamily, NeuralNetwork, NnPotential, NnPotentialStats
+from pgmols.models import AtomBasis, BandStructure, BasisSet, Batch, BravaisLattice, Calc, Cluster, Crystal, Element, ElementCount, EnergyRange, Framework, FrameworkFamily, Geom, GeomSet, Hessian, Jacobian, MDFrame, Mechanism, Method, MillerIndex, Mol, MolGroupObjectPermission, MolSet, MolUserObjectPermission, PathImage, ProductLink, ProjectedDOS, ReactantLink, Reaction, ReactionPath, ReactionType, SinglePoint, SpaceGroup, Species, Stoichiometry, Surface, Trajectory, SpeciesSet
+# Shell Plus Django Imports
+from django.core.cache import cache
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.db.models import Avg, Case, Count, F, Max, Min, Prefetch, Q, Sum, When
+from django.utils import timezone
+from django.urls import reverse
+from django.db.models import Exists, OuterRef, Subquery
+
 def write_atom_names_rdf_from_pdb(pdb_path, output_path="atom_names_rdf.txt"):
     pdb = PDBFile(pdb_path)
     atom_lines = []
@@ -2624,7 +2655,6 @@ def get_avg_atomic_charges_df(smiles, htvs_path=None, htvs_details=None):
         sys.path.append(htvs_path)
     if htvs_path and f"{htvs_path}/djangochem/" not in sys.path:
         sys.path.append(f"{htvs_path}/djangochem/")
-    
     os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
     django.setup()
