@@ -2730,7 +2730,7 @@ def patch_params_with_dft_charges_from_db(smiles, original_param_dict, htvs_path
     # === STAGE 1: Generate Atom Types from SMILES ===
     try:
         canonical_smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), canonical=True)
-        train_args = FFNetArgs()
+        train_args = hitpolyArgs()
         train_args.discrete_flag = True
         molecule_data = [TopologyBuilder(smiles=[canonical_smiles], train_args=train_args, load_geoms=False)]
         dataset = TopologyDataset(data=molecule_data, train_args=train_args)
