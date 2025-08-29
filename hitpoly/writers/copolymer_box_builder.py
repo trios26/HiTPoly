@@ -45,9 +45,8 @@ import django
 # Get the user's home directory (e.g., /home/gridsan/trios)
 home_dir = os.path.expanduser('~')
 
-# Correctly build the path to the parent directory and add it
-# This adds '/home/gridsan/trios/htvs' to Python's search path
 sys.path.append(os.path.join(home_dir, 'htvs'))
+sys.path.append(os.path.join(home_dir, 'htvs/djangochem'))
 
 # Now, set up the Django environment
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
