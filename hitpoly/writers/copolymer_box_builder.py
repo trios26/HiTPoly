@@ -42,8 +42,8 @@ import ast
 
 import django
 # replace with your own path
-sys.path.append('/home/trios/htvs/djangochem')
-sys.path.append('/home/trios/htvs')
+sys.path.append('~/htvs/djangochem')
+sys.path.append('~/htvs')
 
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
