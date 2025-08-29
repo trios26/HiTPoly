@@ -42,6 +42,7 @@ import ast
 
 import django
 # replace with your own path
+home_dir = os.path.expanduser('~') 
 sys.path.append('~/htvs/djangochem')
 sys.path.append('~/htvs')
 
