@@ -2613,62 +2613,199 @@ def get_concentration_from_molality(
     concentration = round(molality * get_mol_mass(long_smiles) * polymer_count / 1000)
     return [concentration, concentration], repeat_units
 
-def average_dft_charges_and_update_param_dict(dft_charge_data, original_param_dict):
+def get_avg_atomic_charges_df(smiles, htvs_path=None, htvs_details=None):
     """
-    Averages DFT charges by atom type number and updates a deep copy of param_dict
-    with the new charges. Handles atom type keys as either int or str.
+    Queries a Django database for multiple geometries of a given SMILES string,
+    validates each geometry's total charge, calculates the average and standard
+    deviation of CHELPG charges, and returns the results in a pandas DataFrame.
+    """
+    # --- Django Environment Setup ---
+    if htvs_path and htvs_path not in sys.path:
+        sys.path.append(htvs_path)
+    if htvs_path and f"{htvs_path}/djangochem/" not in sys.path:
+        sys.path.append(f"{htvs_path}/djangochem/")
+    
+    os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+    django.setup()
 
-    Returns:
-    - new_param_dict: with updated charges
+    from pgmols.models import Geom, Calc
+
+    if htvs_details is None:
+        htvs_details = {}
+    if "calc_method_name" not in htvs_details:
+        htvs_details["calc_method_name"] = "dft_wb97xd3_def2tzvp"
+
+    # Step 1: Find all relevant geometries
+    geoms = Geom.objects.filter(
+        species__group__name="singleion_trios",
+        species__smiles=smiles,
+        parentjob__config__name=htvs_details["geom_config_name"],
+        childjobs__status="done",
+    ).all()
+
+    if not geoms.exists():
+        raise ValueError(f"No geometries found for the given SMILES: {smiles}")
+
+    atomic_numbers = [int(row[0]) for row in geoms[0].xyz]
+    num_atoms = len(atomic_numbers)
+
+    # Step 2: Get charges from all matched geoms
+    charges_qs = Calc.objects.filter(
+        method__name=htvs_details["calc_method_name"],
+        parentjob__group__name="singleion_trios",
+        geoms__id__in=list(geoms.values_list("id", flat=True)),
+        props__atomiccharges__has_key="chelpg",
+    ).values_list("props__atomiccharges__chelpg", flat=True)
+
+    if not charges_qs.exists():
+        raise ValueError(f"No CHELPG charges found for these geometries with SMILES: {smiles}")
+
+    # Step 3: NEW - Validate each geometry's charges before aggregating
+    print("\n--- Validating Individual Geometries ---")
+    valid_charges = []
+    expected_total_charge = -3.0
+    tolerance = 1e-4  # A small tolerance for floating point comparisons
+
+    for i, charge_list in enumerate(charges_qs):
+        # Check 1: Ensure the atom count is correct
+        if len(charge_list) != num_atoms:
+            print(f"  - WARNING: Geom {i+1} skipped. Atom count mismatch (Expected {num_atoms}, got {len(charge_list)}).")
+            continue
+
+        charge_array = np.array(charge_list)
+        total_charge = np.sum(charge_array)
+
+        # Check 2: Confirm the total charge is close to -3.0
+        if not np.isclose(total_charge, expected_total_charge, atol=tolerance):
+            print(f"  - WARNING: Geom {i+1} skipped. Total charge is {total_charge:.6f} (Expected ~{expected_total_charge}).")
+            continue
+        
+        # If both checks pass, the data is good
+        valid_charges.append(charge_array)
+        print(f"  ✓ Geom {i+1} PASSED. Total charge: {total_charge:.6f}")
+    
+    if not valid_charges:
+        raise ValueError(f"Validation failed for all geometries for SMILES: {smiles}")
+
+    # Step 4: Aggregate into array and calculate stats using only valid charges
+    charge_matrix = np.array(valid_charges)
+    num_geometries_averaged = charge_matrix.shape[0]
+
+    mean_charges = charge_matrix.mean(axis=0)
+    std_charges = charge_matrix.std(axis=0)
+
+    print(f"\nFirst atom stats (atom number {atomic_numbers[0]}):")
+    print(f"Mean: {mean_charges[0]: .6f}")
+    print(f"Std : {std_charges[0]: .6f}")
+
+    # Step 5: Build dataframe
+    df = pd.DataFrame({
+        "atomic_number": atomic_numbers,
+        "mean_charge": mean_charges,
+        "std_charge": std_charges
+    })
+
+    print(f"\nAveraged over {num_geometries_averaged} valid geometries.")
+
+    return df, num_geometries_averaged
+
+def patch_params_with_dft_charges_from_db(smiles, original_param_dict, htvs_path, htvs_details):
     """
-    # Step 1: Average DFT charges
-    charge_accumulator = defaultdict(list)
-    for _, row in dft_charge_data.iterrows():
-        try:
+    For a single SMILES, fetches DFT charges from a DB, averages them by ffnet atom type,
+    and patches them into a parameter dictionary with improved error handling.
+    """
+    # --- Django Environment Setup ---
+    if not htvs_path in sys.path:
+        sys.path.append(htvs_path)
+    if not f"{htvs_path}/djangochem/" in sys.path:
+        sys.path.append(f"{htvs_path}/djangochem/")
+    
+    os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+    django.setup()
+
+    print(f"--- Processing SMILES: {smiles} ---")
+
+    # === STAGE 1: Generate Atom Types from SMILES ===
+    try:
+        canonical_smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), canonical=True)
+        train_args = FFNetArgs()
+        train_args.discrete_flag = True
+        molecule_data = [TopologyBuilder(smiles=[canonical_smiles], train_args=train_args, load_geoms=False)]
+        dataset = TopologyDataset(data=molecule_data, train_args=train_args)
+        atomic_nums_from_smiles = dataset.data[0].atomic_nums
+        atom_types = dataset.data[0].atom_type.tolist()
+    except Exception as e:
+        print(f"[FATAL ERROR in STAGE 1: FFNet Processing] {e}")
+        return None
+
+    # === STAGE 2: Fetch Atom-by-Atom Charges from Database ===
+    try:
+        db_df, num_geoms = get_avg_atomic_charges_df(
+            canonical_smiles, htvs_path=htvs_path, htvs_details=htvs_details
+        )
+        atomic_nums_from_db = db_df["atomic_number"].astype(int).tolist()
+        charges_from_db = db_df["mean_charge"].tolist()
+    except Exception as e:
+        print(f"[FATAL ERROR in STAGE 2: Database Query] {e}")
+        return None
+        
+    # === STAGE 3: Validate Data Consistency ===
+    try:
+        if len(atomic_nums_from_smiles) != len(atomic_nums_from_db) or atomic_nums_from_smiles != atomic_nums_from_db:
+            print("[ERROR in STAGE 3: Validation] Atom count or sequence mismatch. Aborting.")
+            return None
+        charge_map_df = pd.DataFrame({"Type (name)": atom_types, "Charge": charges_from_db})
+        print(f"✓ Data validated. Mapped {len(charge_map_df)} atoms.")
+    except Exception as e:
+        print(f"[FATAL ERROR in STAGE 3: Validation] {e}")
+        return None
+
+    # === STAGE 4: Average Charges by Unique Atom Type ===
+    try:
+        charge_accumulator = defaultdict(list)
+        for _, row in charge_map_df.iterrows():
             atom_type = int(row["Type (name)"])
             charge = float(row["Charge"])
             charge_accumulator[atom_type].append(charge)
-        except (ValueError, KeyError) as e:
-            print(f"Skipping row due to error: {e}")
-            continue
+            
+        type_averaged_charges = {
+            atom_type: sum(charges) / len(charges)
+            for atom_type, charges in charge_accumulator.items()
+        }
+        print("\n--- Averaged Charges by Atom Type ---")
+        for atype, charge in sorted(type_averaged_charges.items()):
+            print(f"  Type {atype}: {charge:.6f}")
+    except Exception as e:
+        print(f"[FATAL ERROR in STAGE 4: Averaging Charges] {e}")
+        return None
 
-    averaged_charges = {
-        atom_type: sum(charges) / len(charges)
-        for atom_type, charges in charge_accumulator.items()
-    }
+    # === STAGE 5: Patch the Parameter Dictionary ===
+    try:
+        new_param_dict = copy.deepcopy(original_param_dict)
+        print("\n--- Patching Parameter Dictionary ---")
+        
+        updated_count = 0
+        if "atoms" not in new_param_dict or not isinstance(new_param_dict["atoms"], dict):
+             print("[ERROR in STAGE 5: Patching] 'original_param_dict' is missing the 'atoms' key or it's not a dictionary.")
+             return None
 
-    # Step 2: Deep copy param_dict
-    new_param_dict = copy.deepcopy(original_param_dict)
-
-    # Step 3: Update charges, coercing keys to int
-    updated_atom_types = set()
-    param_atom_types = set()
-
-    for atom_type_key, props in new_param_dict["atoms"].items():
-        try:
+        for atom_type_key, props in new_param_dict["atoms"].items():
             atom_type_int = int(atom_type_key)
-            param_atom_types.add(atom_type_int)
-        except ValueError:
-            print(f"Skipping non-integer atom type key: {atom_type_key}")
-            continue
-
-        if atom_type_int in averaged_charges:
-            props["charges"] = [averaged_charges[atom_type_int]]
-            updated_atom_types.add(atom_type_int)
-            print(f"Updated atom type {atom_type_int} with DFT charge {averaged_charges[atom_type_int]:.4f}")
-        else:
-            print(f"No DFT charge found for atom type {atom_type_int}")
-
-    # Step 4: Report unmatched DFT types
-    dft_atom_types = set(charge_accumulator.keys())
-    unmatched_atom_types = dft_atom_types - param_atom_types
-    if unmatched_atom_types:
-        print("Atom types in DFT table but missing from param_dict['atoms']:")
-        print(sorted(unmatched_atom_types))
-    else:
-        print("All DFT atom types matched a param_dict atom.")
-
-    return new_param_dict
+            if atom_type_int in type_averaged_charges:
+                new_charge = type_averaged_charges[atom_type_int]
+                props["charges"] = [new_charge]
+                print(f"  ✓ Updated atom type {atom_type_int} with new charge {new_charge:.6f}")
+                updated_count += 1
+        
+        if updated_count == 0:
+            print("  ! Warning: No matching atom types were found to update in the dictionary.")
+        
+        return new_param_dict
+    except Exception as e:
+        print(f"[FATAL ERROR in STAGE 5: Patching Dictionary] {e}")
+        return None
 
 def get_concentration_from_charge_neutrality(atom_names_long, param_dict, polymer_count, cation_charge=0.75, single_ion_conductor=True, anionic_atom_count_per_polymer=None):
     """
