@@ -39,13 +39,17 @@ from rdkit.Chem import AllChem
 import itertools
 from openmm.app import PDBFile
 import ast
-
 import django
-# replace with your own path
-home_dir = os.path.expanduser('~') 
-sys.path.append('~/htvs/djangochem')
-sys.path.append('~/htvs')
 
+
+# Get the user's home directory (e.g., /home/gridsan/trios)
+home_dir = os.path.expanduser('~')
+
+# Correctly build the path to the parent directory and add it
+# This adds '/home/gridsan/trios/htvs' to Python's search path
+sys.path.append(os.path.join(home_dir, 'htvs'))
+
+# Now, set up the Django environment
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 django.setup()
