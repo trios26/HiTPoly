@@ -41,12 +41,8 @@ from openmm.app import PDBFile
 import ast
 import django
 
-
-# Get the user's home directory (e.g., /home/gridsan/trios)
-home_dir = os.path.expanduser('~')
-
-sys.path.append(os.path.join(home_dir, 'htvs'))
-sys.path.append(os.path.join(home_dir, 'htvs/djangochem'))
+sys.path.append('/home/gridsan/trios/htvs/djangochem')
+sys.path.append('/home/gridsan/trios/htvs')
 
 # Now, set up the Django environment
 os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
@@ -2654,14 +2650,14 @@ def get_avg_atomic_charges_df(smiles, htvs_path=None, htvs_details=None):
     validates each geometry's total charge, calculates the average and standard
     deviation of CHELPG charges, and returns the results in a pandas DataFrame.
     """
-    # --- Django Environment Setup ---
-    if htvs_path and htvs_path not in sys.path:
-        sys.path.append(htvs_path)
-    if htvs_path and f"{htvs_path}/djangochem/" not in sys.path:
-        sys.path.append(f"{htvs_path}/djangochem/")
-    os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
-    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
-    django.setup()
+    # # --- Django Environment Setup ---
+    # if htvs_path and htvs_path not in sys.path:
+    #     sys.path.append(htvs_path)
+    # if htvs_path and f"{htvs_path}/djangochem/" not in sys.path:
+    #     sys.path.append(f"{htvs_path}/djangochem/")
+    # os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
+    # os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+    # django.setup()
 
     from pgmols.models import Geom, Calc
 
