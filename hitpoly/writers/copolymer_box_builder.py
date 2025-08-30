@@ -566,7 +566,7 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
         f.write("# Load modules" + "\n")
         f.write("source /etc/profile" + "\n")
         f.write("source $HOME/.bashrc" + "\n")
-        f.write("conda activate ligpargen" + "\n")
+        f.write("conda activate htvs" + "\n")
         f.write("export PYTHONPATH=$HOME/ligpargen:$PYTHONPATH" + "\n")
         f.write("cwd=$(pwd)" + "\n")
         f.write(f"cd {ligpargen_path}" + "\n")
