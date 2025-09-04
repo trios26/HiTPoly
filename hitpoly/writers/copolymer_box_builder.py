@@ -41,13 +41,9 @@ from openmm.app import PDBFile
 import ast
 import django
 
-sys.path.append('/home/gridsan/trios/htvs/djangochem')
-sys.path.append('/home/gridsan/trios/htvs')
+# sys.path.append('/home/gridsan/trios/htvs/djangochem')
+# sys.path.append('/home/gridsan/trios/htvs')
 
-# Now, set up the Django environment
-os.environ["DJANGO_SETTINGS_MODULE"] = "djangochem.settings.orgel"
-os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
-django.setup()
 
 # django imports 
 from django.contrib.admin.models import LogEntry
