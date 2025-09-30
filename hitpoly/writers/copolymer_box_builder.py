@@ -1247,6 +1247,114 @@ def create_combined_param_dict(smiles_list, ligpargen_path, hitpoly_path, platfo
 
     return combined_param_dict, atoms_short, atom_names_short
 
+# def atom_name_reindexing(mol_dict):
+#     import string as STRING
+#     import itertools
+
+#     digits = STRING.digits
+#     letters = STRING.ascii_uppercase
+
+#     # Expanded index list generation
+#     index_list = []
+
+#     # 1. Single digit (1-9)
+#     for i in range(1, 10):
+#         index_list.append(str(i))
+
+#     # 2. Two-digit combinations (00-99)
+#     for i in itertools.product(digits, repeat=2):
+#         index_list.append("".join(i))
+
+#     # 3. Letter-digit combinations (A0-Z9)
+#     for i in itertools.product(letters, digits):
+#         index_list.append("".join(i))
+
+#     # 4. Two-letter combinations (AA-ZZ)
+#     for i in itertools.product(letters, repeat=2):
+#         index_list.append("".join(i))
+
+#     # 5. Three-letter combinations (AAA-ZZZ)
+#     for i in itertools.product(letters, repeat=3):
+#         index_list.append("".join(i))
+
+#     # 6. Letter-digit-letter combinations (A0A-Z9Z)
+#     for i in itertools.product(letters, digits, letters):
+#         index_list.append("".join(i))
+
+#     # 7. Three-digit combinations (000-999)
+#     for i in itertools.product(digits, repeat=3):
+#         index_list.append("".join(i))
+
+#     # ** New: Add dynamic expansion beyond current naming schemes **
+#     def expand_index_list():
+#         """Generator to expand naming options dynamically if the list is exhausted."""
+#         for length in range(4, 10):  # Start with 4-character combinations
+#             for combo in itertools.product(letters + digits, repeat=length):
+#                 yield "".join(combo)
+
+#     # Debug: Print the generated index list and its length
+#     print(f"Total pre-generated indices: {len(index_list)}")
+
+#     atom_types_list = []  # list of lists where each sublist has 4 elements
+#     # name, class, element, mass
+#     atom_dict = {}
+
+#     # Debug: Print the initial mol_dict keys and a brief summary
+#     print(f"Initial mol_dict keys: {list(mol_dict.keys())}")
+#     for key, mol in mol_dict.items():
+#         print("IN ATOM REINDEXING")
+#         print(f"Processing molecule key: {key}")
+
+#         for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
+#             # Debug: Print initial atom details
+#             # print(f"Initial Atom: {atom}, Name: {atom.name}, Element: {atom.element.symbol}")
+
+#             atom_name = atom.name[len(atom.element.symbol):]
+#             if atom.element.symbol not in atom_dict:
+#                 atom_dict[atom.element.symbol] = atom_name
+#             else:
+#                 prev_atom_ind = index_list.index(atom_dict[atom.element.symbol])
+
+#                 # Check if the next index is within bounds
+#                 try:
+#                     if index_list.index(atom.name[len(atom.element.symbol):]) <= prev_atom_ind:
+#                         if prev_atom_ind + 1 < len(index_list):
+#                             atom_name = index_list[prev_atom_ind + 1]
+#                         else:
+#                             # Dynamically expand the index list if exhausted
+#                             new_suffix = next(expand_index_list())
+#                             index_list.append(new_suffix)
+#                             atom_name = new_suffix
+
+#                         full_name = atom.element.symbol + atom_name
+#                         for i in mol["mol_pdb"]._residues:
+#                             i._atoms[ind].name = full_name
+#                         atom_dict[atom.element.symbol] = atom_name
+#                     else:
+#                         atom_dict[atom.element.symbol] = atom_name
+#                 except ValueError:
+#                     # Handle case where atom.name doesn't match the current index_list
+#                     atom_name = index_list[0]  # Reset to first valid name
+#                     full_name = atom.element.symbol + atom_name
+#                     atom_dict[atom.element.symbol] = atom_name
+
+#             # Debug: Print updated atom details
+#             # print(f"Updated Atom Name: {atom.element.symbol + atom_name}")
+
+#             # Verification Step: Print to verify the atom name update
+#             # print(f"Verifying update: Atom {ind} is now named {mol['mol_pdb']._residues[0]._atoms[ind].name}")
+
+#             atom_types_list.append(
+#                 [atom.name, atom.name, atom.element.symbol, atom.element.mass._value]
+#             )
+
+#     # Debug: Print final atom_dict and atom_types_list
+#     print(f"Final atom_dict: {atom_dict}")
+#     print(f"Final atom_types_list: {atom_types_list}")
+
+#     return atom_dict, atom_types_list
+
+##Test
 def atom_name_reindexing(mol_dict):
     import string as STRING
     import itertools
@@ -1292,63 +1400,73 @@ def atom_name_reindexing(mol_dict):
             for combo in itertools.product(letters + digits, repeat=length):
                 yield "".join(combo)
 
-    # Debug: Print the generated index list and its length
     print(f"Total pre-generated indices: {len(index_list)}")
 
-    atom_types_list = []  # list of lists where each sublist has 4 elements
-    # name, class, element, mass
+    atom_types_list = []
     atom_dict = {}
 
-    # Debug: Print the initial mol_dict keys and a brief summary
+    # --- START: New logic to handle ions correctly ---
+    ION_ELEMENTS = {'NA', 'LI', 'K', 'MG', 'CA', 'CL', 'F', 'BR', 'I'}
+    seen_ion_types = set()
+    # --- END: New logic ---
+
     print(f"Initial mol_dict keys: {list(mol_dict.keys())}")
     for key, mol in mol_dict.items():
         print("IN ATOM REINDEXING")
         print(f"Processing molecule key: {key}")
 
-        for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
-            # Debug: Print initial atom details
-            # print(f"Initial Atom: {atom}, Name: {atom.name}, Element: {atom.element.symbol}")
+        # --- START: New logic to check if molecule is a simple ion ---
+        is_ion = False
+        if len(mol["mol_pdb"]._residues) == 1 and len(mol["mol_pdb"]._residues[0]._atoms) == 1:
+            single_atom = mol["mol_pdb"]._residues[0]._atoms[0]
+            element_symbol = single_atom.element.symbol.upper()
+            if element_symbol in ION_ELEMENTS:
+                is_ion = True
+        # --- END: New logic ---
 
-            atom_name = atom.name[len(atom.element.symbol):]
-            if atom.element.symbol not in atom_dict:
-                atom_dict[atom.element.symbol] = atom_name
-            else:
-                prev_atom_ind = index_list.index(atom_dict[atom.element.symbol])
+        if is_ion:
+            # --- This block handles simple ions like Na+ and Li+ ---
+            atom = mol["mol_pdb"]._residues[0]._atoms[0]
+            ion_type_name = atom.element.symbol.upper()
+            atom.name = ion_type_name # Rename the atom in the PDB for consistency
 
-                # Check if the next index is within bounds
-                try:
-                    if index_list.index(atom.name[len(atom.element.symbol):]) <= prev_atom_ind:
-                        if prev_atom_ind + 1 < len(index_list):
-                            atom_name = index_list[prev_atom_ind + 1]
-                        else:
-                            # Dynamically expand the index list if exhausted
-                            new_suffix = next(expand_index_list())
-                            index_list.append(new_suffix)
-                            atom_name = new_suffix
-
-                        full_name = atom.element.symbol + atom_name
-                        for i in mol["mol_pdb"]._residues:
-                            i._atoms[ind].name = full_name
-                        atom_dict[atom.element.symbol] = atom_name
-                    else:
-                        atom_dict[atom.element.symbol] = atom_name
-                except ValueError:
-                    # Handle case where atom.name doesn't match the current index_list
-                    atom_name = index_list[0]  # Reset to first valid name
-                    full_name = atom.element.symbol + atom_name
+            if ion_type_name not in seen_ion_types:
+                atom_types_list.append(
+                    [ion_type_name, ion_type_name, atom.element.symbol, atom.element.mass._value]
+                )
+                seen_ion_types.add(ion_type_name)
+        else:
+            # --- This block handles polymers using your original logic ---
+            for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
+                atom_name = atom.name[len(atom.element.symbol):]
+                if atom.element.symbol not in atom_dict:
                     atom_dict[atom.element.symbol] = atom_name
+                else:
+                    prev_atom_ind = index_list.index(atom_dict[atom.element.symbol])
+                    try:
+                        if index_list.index(atom.name[len(atom.element.symbol):]) <= prev_atom_ind:
+                            if prev_atom_ind + 1 < len(index_list):
+                                atom_name = index_list[prev_atom_ind + 1]
+                            else:
+                                new_suffix = next(expand_index_list())
+                                index_list.append(new_suffix)
+                                atom_name = new_suffix
 
-            # Debug: Print updated atom details
-            # print(f"Updated Atom Name: {atom.element.symbol + atom_name}")
+                            full_name = atom.element.symbol + atom_name
+                            for i in mol["mol_pdb"]._residues:
+                                i._atoms[ind].name = full_name
+                            atom_dict[atom.element.symbol] = atom_name
+                        else:
+                            atom_dict[atom.element.symbol] = atom_name
+                    except ValueError:
+                        atom_name = index_list[0]
+                        full_name = atom.element.symbol + atom_name
+                        atom_dict[atom.element.symbol] = atom_name
 
-            # Verification Step: Print to verify the atom name update
-            # print(f"Verifying update: Atom {ind} is now named {mol['mol_pdb']._residues[0]._atoms[ind].name}")
+                atom_types_list.append(
+                    [atom.name, atom.name, atom.element.symbol, atom.element.mass._value]
+                )
 
-            atom_types_list.append(
-                [atom.name, atom.name, atom.element.symbol, atom.element.mass._value]
-            )
-
-    # Debug: Print final atom_dict and atom_types_list
     print(f"Final atom_dict: {atom_dict}")
     print(f"Final atom_types_list: {atom_types_list}")
 
