@@ -1362,7 +1362,7 @@ def atom_name_reindexing(mol_dict):
     digits = STRING.digits
     letters = STRING.ascii_uppercase
 
-    # Indices in increasing order of preference
+    # Expanded index list generation
     index_list = []
 
     # 1. Single digit (1-9)
@@ -1393,118 +1393,123 @@ def atom_name_reindexing(mol_dict):
     for i in itertools.product(digits, repeat=3):
         index_list.append("".join(i))
 
+    # ** New: Add dynamic expansion beyond current naming schemes **
     def expand_index_list():
         """Generator to expand naming options dynamically if the list is exhausted."""
         for length in range(4, 10):  # Start with 4-character combinations
             for combo in itertools.product(letters + digits, repeat=length):
                 yield "".join(combo)
 
-    print(f"Total pre-generated indices: {len(index_list)}")
-
-    # Names that must remain bare (no suffix) and cannot be produced by other elements accidentally
-    RESERVED_BARE = {"NA", "LI"}
-
-    atom_types_list = []  # list of lists where each sublist has 4 elements: name, class, element, mass
-    atom_dict = {}        # tracks last suffix used per element
-    _expand_gen = expand_index_list()
-
-    def next_valid_suffix(elem: str, prev_suffix: str | None) -> str:
+    def bump_suffix_avoiding_NA(elem_symbol, current_suffix):
         """
-        Get the next suffix for element `elem` that doesn't create a reserved bare name.
-        If prev_suffix is None, start from the first index in index_list.
+        If element is 'N', avoid any suffix that would make the full name start with 'NA'.
+        Returns a (possibly) adjusted suffix.
         """
-        # Start position
-        if prev_suffix is None:
-            start_idx = -1
-        else:
-            try:
-                start_idx = index_list.index(prev_suffix)
-            except ValueError:
-                start_idx = -1
+        elem_up = elem_symbol.upper()
+        # Only guard Nitrogen; allow Na cations like 'NA1'
+        if elem_up != 'N':
+            return current_suffix
 
-        # Try advancing in index_list
-        i = start_idx + 1
+        # If N + suffix would start with 'NA', advance to the next suffix not starting with 'A'
+        try:
+            # Try from current suffix's position (if present)
+            cur_idx = index_list.index(current_suffix) if current_suffix in index_list else -1
+        except Exception:
+            cur_idx = -1
+
+        # If already safe, keep it
+        if not (elem_up + str(current_suffix)).upper().startswith('NA'):
+            return current_suffix
+
+        # Otherwise, move forward until suffix doesn't start with 'A'
+        i = cur_idx + 1
+        expander = expand_index_list()
         while True:
             if i < len(index_list):
                 candidate = index_list[i]
-                full_name = elem + candidate
-                # Don't allow accidental reserved bare names (paranoia; elem+suffix can't equal 'NA'/'LI', but keep guard)
-                if full_name not in RESERVED_BARE:
+                if not candidate.startswith('A'):
                     return candidate
                 i += 1
             else:
-                # Out of pre-generated, use dynamic expansion
-                new_suffix = next(_expand_gen)
+                # Dynamically expand if needed
+                new_suffix = next(expander)
                 index_list.append(new_suffix)
-                full_name = elem + new_suffix
-                if full_name not in RESERVED_BARE:
+                if not new_suffix.startswith('A'):
                     return new_suffix
 
+    # Debug: Print the generated index list and its length
+    print(f"Total pre-generated indices: {len(index_list)}")
+
+    atom_types_list = []  # list of lists where each sublist has 4 elements
+    # name, class, element, mass
+    atom_dict = {}
+
+    # Debug: Print the initial mol_dict keys and a brief summary
     print(f"Initial mol_dict keys: {list(mol_dict.keys())}")
     for key, mol in mol_dict.items():
         print("IN ATOM REINDEXING")
         print(f"Processing molecule key: {key}")
 
-        # Iterate atoms of the (first) residue as in your original code
         for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
-            elem_raw = atom.element.symbol  # keep original for length slicing
-            elem = elem_raw.upper()
+            elem_sym = atom.element.symbol  # case as provided by toolkit
+            suffix = atom.name[len(elem_sym):]  # existing suffix (may be '')
 
-            # Extract whatever suffix the atom currently has (may be empty)
-            current_suffix = atom.name[len(elem_raw):]
-
-            # 1) Special case: Na and Li must be bare names 'NA'/'LI'
-            if elem in RESERVED_BARE:
-                full_name = elem  # no suffix
-                # Apply to all residues at this atom index, matching your original approach
+            # --- Minimal fix applied here and whenever we update the suffix ---
+            # If nitrogen would become 'NA...' (e.g., 'A1'), push to next safe suffix
+            safe_suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
+            if safe_suffix != suffix:
+                suffix = safe_suffix
+                full_name = elem_sym + suffix
                 for res in mol["mol_pdb"]._residues:
                     res._atoms[ind].name = full_name
-                # Track in dict (store empty suffix to avoid index lookups later)
-                atom_dict[elem] = ""
+
+            if elem_sym not in atom_dict:
+                atom_dict[elem_sym] = suffix
             else:
-                # 2) General elements: allocate/advance suffixes while avoiding reserved collisions
-                if elem not in atom_dict:
-                    # First time we see this element: if it already has a valid suffix, use it;
-                    # otherwise assign the first valid suffix.
-                    if current_suffix and (elem + current_suffix) not in RESERVED_BARE:
-                        atom_dict[elem] = current_suffix
-                        full_name = elem + current_suffix
-                    else:
-                        suffix = next_valid_suffix(elem, None)
-                        atom_dict[elem] = suffix
-                        full_name = elem + suffix
+                prev_atom_ind = index_list.index(atom_dict[elem_sym]) if atom_dict[elem_sym] in index_list else -1
+
+                # Check if the next index is within bounds
+                try:
+                    cur_idx = index_list.index(suffix) if suffix in index_list else -1
+                    if cur_idx <= prev_atom_ind:
+                        if prev_atom_ind + 1 < len(index_list):
+                            suffix = index_list[prev_atom_ind + 1]
+                        else:
+                            # Dynamically expand the index list if exhausted
+                            new_suffix = next(expand_index_list())
+                            index_list.append(new_suffix)
+                            suffix = new_suffix
+
+                        # Apply minimal fix again after bumping
+                        suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
+
+                        full_name = elem_sym + suffix
                         for res in mol["mol_pdb"]._residues:
                             res._atoms[ind].name = full_name
-                else:
-                    # We've seen this element before; ensure monotonic non-colliding suffix
-                    try:
-                        # If current suffix is <= last used, or would collide, advance
-                        last = atom_dict[elem]
-                        need_new = (
-                            (not current_suffix) or
-                            (current_suffix in index_list and index_list.index(current_suffix) <= (index_list.index(last) if last in index_list else -1)) or
-                            ((elem + current_suffix) in RESERVED_BARE)
-                        )
-                    except ValueError:
-                        # If current suffix not in index_list, just treat as needing a new one
-                        need_new = True
-
-                    if need_new:
-                        suffix = next_valid_suffix(elem, atom_dict[elem] if atom_dict[elem] else None)
-                        atom_dict[elem] = suffix
-                        full_name = elem + suffix
+                        atom_dict[elem_sym] = suffix
+                    else:
+                        # Even if keeping current suffix, ensure it's safe for Nitrogen
+                        suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
+                        atom_dict[elem_sym] = suffix
+                        full_name = elem_sym + suffix
                         for res in mol["mol_pdb"]._residues:
                             res._atoms[ind].name = full_name
-                    else:
-                        # Accept the current suffix and update tracker
-                        atom_dict[elem] = current_suffix
-                        full_name = elem + current_suffix
+                except ValueError:
+                    # Handle case where atom.name doesn't match the current index_list
+                    suffix = index_list[0]  # Reset to first valid name
+                    suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
+                    full_name = elem_sym + suffix
+                    atom_dict[elem_sym] = suffix
+                    for res in mol["mol_pdb"]._residues:
+                        res._atoms[ind].name = full_name
 
-            # Record to atom_types_list (use the possibly updated name from this residue)
+            # Record (use updated full name)
+            full_name = elem_sym + suffix
             atom_types_list.append(
-                [full_name, full_name, elem, atom.element.mass._value]
+                [full_name, full_name, elem_sym, atom.element.mass._value]
             )
 
+    # Debug: Print final atom_dict and atom_types_list
     print(f"Final atom_dict: {atom_dict}")
     print(f"Final atom_types_list: {atom_types_list}")
 
