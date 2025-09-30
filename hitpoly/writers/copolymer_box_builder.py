@@ -1354,101 +1354,159 @@ def create_combined_param_dict(smiles_list, ligpargen_path, hitpoly_path, platfo
 
 #     return atom_dict, atom_types_list
 
-##Test
+##TEST
 def atom_name_reindexing(mol_dict):
     import string as STRING
     import itertools
 
-    # --- This entire section for generating a list of unique suffixes is for the polymer ---
     digits = STRING.digits
     letters = STRING.ascii_uppercase
+
+    # Indices in increasing order of preference
     index_list = []
-    for i in range(1, 10): index_list.append(str(i))
-    for i in itertools.product(digits, repeat=2): index_list.append("".join(i))
-    for i in itertools.product(letters, digits): index_list.append("".join(i))
-    for i in itertools.product(letters, repeat=2): index_list.append("".join(i))
-    for i in itertools.product(letters, repeat=3): index_list.append("".join(i))
-    for i in itertools.product(letters, digits, letters): index_list.append("".join(i))
-    for i in itertools.product(digits, repeat=3): index_list.append("".join(i))
+
+    # 1. Single digit (1-9)
+    for i in range(1, 10):
+        index_list.append(str(i))
+
+    # 2. Two-digit combinations (00-99)
+    for i in itertools.product(digits, repeat=2):
+        index_list.append("".join(i))
+
+    # 3. Letter-digit combinations (A0-Z9)
+    for i in itertools.product(letters, digits):
+        index_list.append("".join(i))
+
+    # 4. Two-letter combinations (AA-ZZ)
+    for i in itertools.product(letters, repeat=2):
+        index_list.append("".join(i))
+
+    # 5. Three-letter combinations (AAA-ZZZ)
+    for i in itertools.product(letters, repeat=3):
+        index_list.append("".join(i))
+
+    # 6. Letter-digit-letter combinations (A0A-Z9Z)
+    for i in itertools.product(letters, digits, letters):
+        index_list.append("".join(i))
+
+    # 7. Three-digit combinations (000-999)
+    for i in itertools.product(digits, repeat=3):
+        index_list.append("".join(i))
+
     def expand_index_list():
-        for length in range(4, 10):
+        """Generator to expand naming options dynamically if the list is exhausted."""
+        for length in range(4, 10):  # Start with 4-character combinations
             for combo in itertools.product(letters + digits, repeat=length):
                 yield "".join(combo)
 
-    # --- START: MODIFIED LOGIC ---
-    
-    # Define which elements are simple ions and should have a single, unified type
-    ION_ELEMENTS = {'NA', 'LI', 'K', 'MG', 'CA', 'CL', 'F', 'BR', 'I'}
-    
-    atom_types_list = []
-    seen_ion_types = set()
-    processed_keys = set() # To keep track of ions we've already handled
+    print(f"Total pre-generated indices: {len(index_list)}")
 
-    # --- PASS 1: Process ONLY the simple ions ---
-    for key, mol in mol_dict.items():
-        is_ion = False
-        if len(mol["mol_pdb"]._residues) == 1 and len(mol["mol_pdb"]._residues[0]._atoms) == 1:
-            single_atom = mol["mol_pdb"]._residues[0]._atoms[0]
-            element_symbol = single_atom.element.symbol.upper()
-            if element_symbol in ION_ELEMENTS:
-                is_ion = True
-        
-        if is_ion:
-            ion_type_name = mol["mol_pdb"]._residues[0]._atoms[0].element.symbol.upper()
-            atom = mol["mol_pdb"]._residues[0]._atoms[0]
-            
-            # Rename the atom in the PDB to the simple, numberless name (e.g., "NA")
-            atom.name = ion_type_name
-            
-            # Add the type to our master list, but only if we haven't seen it before
-            if ion_type_name not in seen_ion_types:
-                atom_types_list.append(
-                    [ion_type_name, ion_type_name, atom.element.symbol, atom.element.mass._value]
-                )
-                seen_ion_types.add(ion_type_name)
-            
-            processed_keys.add(key) # Mark this molecule as handled
+    # Names that must remain bare (no suffix) and cannot be produced by other elements accidentally
+    RESERVED_BARE = {"NA", "LI"}
 
-    # --- PASS 2: Process all other molecules (polymers) using your original logic ---
-    atom_dict = {}
-    for key, mol in mol_dict.items():
-        if key in processed_keys:
-            continue # Skip the ions we've already handled
+    atom_types_list = []  # list of lists where each sublist has 4 elements: name, class, element, mass
+    atom_dict = {}        # tracks last suffix used per element
+    _expand_gen = expand_index_list()
 
-        for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
-            atom_name = atom.name[len(atom.element.symbol):]
-            if atom.element.symbol not in atom_dict:
-                atom_dict[atom.element.symbol] = atom_name
+    def next_valid_suffix(elem: str, prev_suffix: str | None) -> str:
+        """
+        Get the next suffix for element `elem` that doesn't create a reserved bare name.
+        If prev_suffix is None, start from the first index in index_list.
+        """
+        # Start position
+        if prev_suffix is None:
+            start_idx = -1
+        else:
+            try:
+                start_idx = index_list.index(prev_suffix)
+            except ValueError:
+                start_idx = -1
+
+        # Try advancing in index_list
+        i = start_idx + 1
+        while True:
+            if i < len(index_list):
+                candidate = index_list[i]
+                full_name = elem + candidate
+                # Don't allow accidental reserved bare names (paranoia; elem+suffix can't equal 'NA'/'LI', but keep guard)
+                if full_name not in RESERVED_BARE:
+                    return candidate
+                i += 1
             else:
-                prev_atom_ind = index_list.index(atom_dict[atom.element.symbol])
-                try:
-                    if index_list.index(atom.name[len(atom.element.symbol):]) <= prev_atom_ind:
-                        if prev_atom_ind + 1 < len(index_list):
-                            atom_name = index_list[prev_atom_ind + 1]
-                        else:
-                            new_suffix = next(expand_index_list())
-                            index_list.append(new_suffix)
-                            atom_name = new_suffix
-                        
-                        full_name = atom.element.symbol + atom_name
-                        # Make sure we don't accidentally create a reserved ion name
-                        if full_name.upper() in ION_ELEMENTS:
-                            atom_name = index_list[index_list.index(atom_name) + 1]
-                            full_name = atom.element.symbol + atom_name
+                # Out of pre-generated, use dynamic expansion
+                new_suffix = next(_expand_gen)
+                index_list.append(new_suffix)
+                full_name = elem + new_suffix
+                if full_name not in RESERVED_BARE:
+                    return new_suffix
 
-                        for i in mol["mol_pdb"]._residues:
-                            i._atoms[ind].name = full_name
-                        atom_dict[atom.element.symbol] = atom_name
+    print(f"Initial mol_dict keys: {list(mol_dict.keys())}")
+    for key, mol in mol_dict.items():
+        print("IN ATOM REINDEXING")
+        print(f"Processing molecule key: {key}")
+
+        # Iterate atoms of the (first) residue as in your original code
+        for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
+            elem_raw = atom.element.symbol  # keep original for length slicing
+            elem = elem_raw.upper()
+
+            # Extract whatever suffix the atom currently has (may be empty)
+            current_suffix = atom.name[len(elem_raw):]
+
+            # 1) Special case: Na and Li must be bare names 'NA'/'LI'
+            if elem in RESERVED_BARE:
+                full_name = elem  # no suffix
+                # Apply to all residues at this atom index, matching your original approach
+                for res in mol["mol_pdb"]._residues:
+                    res._atoms[ind].name = full_name
+                # Track in dict (store empty suffix to avoid index lookups later)
+                atom_dict[elem] = ""
+            else:
+                # 2) General elements: allocate/advance suffixes while avoiding reserved collisions
+                if elem not in atom_dict:
+                    # First time we see this element: if it already has a valid suffix, use it;
+                    # otherwise assign the first valid suffix.
+                    if current_suffix and (elem + current_suffix) not in RESERVED_BARE:
+                        atom_dict[elem] = current_suffix
+                        full_name = elem + current_suffix
                     else:
-                        atom_dict[atom.element.symbol] = atom_name
-                except ValueError:
-                    atom_name = index_list[0]
-                    full_name = atom.element.symbol + atom_name
-                    atom_dict[atom.element.symbol] = atom_name
+                        suffix = next_valid_suffix(elem, None)
+                        atom_dict[elem] = suffix
+                        full_name = elem + suffix
+                        for res in mol["mol_pdb"]._residues:
+                            res._atoms[ind].name = full_name
+                else:
+                    # We've seen this element before; ensure monotonic non-colliding suffix
+                    try:
+                        # If current suffix is <= last used, or would collide, advance
+                        last = atom_dict[elem]
+                        need_new = (
+                            (not current_suffix) or
+                            (current_suffix in index_list and index_list.index(current_suffix) <= (index_list.index(last) if last in index_list else -1)) or
+                            ((elem + current_suffix) in RESERVED_BARE)
+                        )
+                    except ValueError:
+                        # If current suffix not in index_list, just treat as needing a new one
+                        need_new = True
 
+                    if need_new:
+                        suffix = next_valid_suffix(elem, atom_dict[elem] if atom_dict[elem] else None)
+                        atom_dict[elem] = suffix
+                        full_name = elem + suffix
+                        for res in mol["mol_pdb"]._residues:
+                            res._atoms[ind].name = full_name
+                    else:
+                        # Accept the current suffix and update tracker
+                        atom_dict[elem] = current_suffix
+                        full_name = elem + current_suffix
+
+            # Record to atom_types_list (use the possibly updated name from this residue)
             atom_types_list.append(
-                [atom.name, atom.name, atom.element.symbol, atom.element.mass._value]
+                [full_name, full_name, elem, atom.element.mass._value]
             )
+
+    print(f"Final atom_dict: {atom_dict}")
+    print(f"Final atom_types_list: {atom_types_list}")
 
     return atom_dict, atom_types_list
 
