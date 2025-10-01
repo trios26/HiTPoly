@@ -1393,35 +1393,24 @@ def atom_name_reindexing(mol_dict):
     for i in itertools.product(digits, repeat=3):
         index_list.append("".join(i))
 
-    # ** New: Add dynamic expansion beyond current naming schemes **
+    # ** Dynamic expansion if exhausted (unchanged behavior) **
     def expand_index_list():
-        """Generator to expand naming options dynamically if the list is exhausted."""
         for length in range(4, 10):  # Start with 4-character combinations
             for combo in itertools.product(letters + digits, repeat=length):
                 yield "".join(combo)
 
-    def bump_suffix_avoiding_NA(elem_symbol, current_suffix):
-        """
-        If element is 'N', avoid any suffix that would make the full name start with 'NA'.
-        Returns a (possibly) adjusted suffix.
-        """
-        elem_up = elem_symbol.upper()
-        # Only guard Nitrogen; allow Na cations like 'NA1'
-        if elem_up != 'N':
-            return current_suffix
-
-        # If N + suffix would start with 'NA', advance to the next suffix not starting with 'A'
+    # ---- Minimal helper: avoid Nitrogen names starting with 'NA' ----
+    def next_suffix_not_starting_A(current_suffix):
+        """Return current_suffix if safe; otherwise the next index not starting with 'A'."""
         try:
-            # Try from current suffix's position (if present)
             cur_idx = index_list.index(current_suffix) if current_suffix in index_list else -1
         except Exception:
             cur_idx = -1
 
-        # If already safe, keep it
-        if not (elem_up + str(current_suffix)).upper().startswith('NA'):
+        # If already safe (doesn't start with 'A'), keep it
+        if not str(current_suffix).startswith('A'):
             return current_suffix
 
-        # Otherwise, move forward until suffix doesn't start with 'A'
         i = cur_idx + 1
         expander = expand_index_list()
         while True:
@@ -1431,7 +1420,6 @@ def atom_name_reindexing(mol_dict):
                     return candidate
                 i += 1
             else:
-                # Dynamically expand if needed
                 new_suffix = next(expander)
                 index_list.append(new_suffix)
                 if not new_suffix.startswith('A'):
@@ -1440,8 +1428,7 @@ def atom_name_reindexing(mol_dict):
     # Debug: Print the generated index list and its length
     print(f"Total pre-generated indices: {len(index_list)}")
 
-    atom_types_list = []  # list of lists where each sublist has 4 elements
-    # name, class, element, mass
+    atom_types_list = []  # list of lists where each sublist has 4 elements: name, class, element, mass
     atom_dict = {}
 
     # Debug: Print the initial mol_dict keys and a brief summary
@@ -1451,60 +1438,68 @@ def atom_name_reindexing(mol_dict):
         print(f"Processing molecule key: {key}")
 
         for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
-            elem_sym = atom.element.symbol  # case as provided by toolkit
-            suffix = atom.name[len(elem_sym):]  # existing suffix (may be '')
+            elem_sym = atom.element.symbol  # e.g., 'N', 'Na'
+            elem_up = elem_sym.upper()
 
-            # --- Minimal fix applied here and whenever we update the suffix ---
-            # If nitrogen would become 'NA...' (e.g., 'A1'), push to next safe suffix
-            safe_suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
-            if safe_suffix != suffix:
-                suffix = safe_suffix
-                full_name = elem_sym + suffix
-                for res in mol["mol_pdb"]._residues:
-                    res._atoms[ind].name = full_name
+            # current suffix (may be '')
+            atom_name = atom.name[len(elem_sym):]
+
+            # --- Minimal fix point #1: if element is Nitrogen, ensure suffix doesn't start with 'A'
+            if elem_up == 'N':
+                safe = next_suffix_not_starting_A(atom_name)
+                if safe != atom_name:
+                    atom_name = safe
+                    full_name = elem_sym + atom_name
+                    for res in mol["mol_pdb"]._residues:
+                        res._atoms[ind].name = full_name
 
             if elem_sym not in atom_dict:
-                atom_dict[elem_sym] = suffix
+                atom_dict[elem_sym] = atom_name
             else:
                 prev_atom_ind = index_list.index(atom_dict[elem_sym]) if atom_dict[elem_sym] in index_list else -1
 
                 # Check if the next index is within bounds
                 try:
-                    cur_idx = index_list.index(suffix) if suffix in index_list else -1
+                    cur_idx = index_list.index(atom.name[len(elem_sym):]) if atom.name[len(elem_sym):] in index_list else -1
                     if cur_idx <= prev_atom_ind:
                         if prev_atom_ind + 1 < len(index_list):
-                            suffix = index_list[prev_atom_ind + 1]
+                            atom_name = index_list[prev_atom_ind + 1]
                         else:
                             # Dynamically expand the index list if exhausted
                             new_suffix = next(expand_index_list())
                             index_list.append(new_suffix)
-                            suffix = new_suffix
+                            atom_name = new_suffix
 
-                        # Apply minimal fix again after bumping
-                        suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
+                        # --- Minimal fix point #2: re-ensure Nitrogen doesn't get 'A*'
+                        if elem_up == 'N':
+                            atom_name = next_suffix_not_starting_A(atom_name)
 
-                        full_name = elem_sym + suffix
-                        for res in mol["mol_pdb"]._residues:
-                            res._atoms[ind].name = full_name
-                        atom_dict[elem_sym] = suffix
+                        full_name = elem_sym + atom_name
+                        for r in mol["mol_pdb"]._residues:
+                            r._atoms[ind].name = full_name
+                        atom_dict[elem_sym] = atom_name
                     else:
                         # Even if keeping current suffix, ensure it's safe for Nitrogen
-                        suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
-                        atom_dict[elem_sym] = suffix
-                        full_name = elem_sym + suffix
-                        for res in mol["mol_pdb"]._residues:
-                            res._atoms[ind].name = full_name
+                        if elem_up == 'N':
+                            safe = next_suffix_not_starting_A(atom_name)
+                            if safe != atom_name:
+                                atom_name = safe
+                                full_name = elem_sym + atom_name
+                                for r in mol["mol_pdb"]._residues:
+                                    r._atoms[ind].name = full_name
+                        atom_dict[elem_sym] = atom_name
                 except ValueError:
                     # Handle case where atom.name doesn't match the current index_list
-                    suffix = index_list[0]  # Reset to first valid name
-                    suffix = bump_suffix_avoiding_NA(elem_sym, suffix)
-                    full_name = elem_sym + suffix
-                    atom_dict[elem_sym] = suffix
-                    for res in mol["mol_pdb"]._residues:
-                        res._atoms[ind].name = full_name
+                    atom_name = index_list[0]  # Reset to first valid name
+                    if elem_up == 'N':
+                        atom_name = next_suffix_not_starting_A(atom_name)
+                    full_name = elem_sym + atom_name
+                    atom_dict[elem_sym] = atom_name
+                    for r in mol["mol_pdb"]._residues:
+                        r._atoms[ind].name = full_name
 
-            # Record (use updated full name)
-            full_name = elem_sym + suffix
+            # Debug record (use the possibly updated name)
+            full_name = elem_sym + atom_name
             atom_types_list.append(
                 [full_name, full_name, elem_sym, atom.element.mass._value]
             )
