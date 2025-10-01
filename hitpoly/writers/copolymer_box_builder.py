@@ -1362,7 +1362,7 @@ def atom_name_reindexing(mol_dict):
     digits = STRING.digits
     letters = STRING.ascii_uppercase
 
-    # Expanded index list generation
+    # Expanded index list generation (unchanged)
     index_list = []
 
     # 1. Single digit (1-9)
@@ -1393,13 +1393,13 @@ def atom_name_reindexing(mol_dict):
     for i in itertools.product(digits, repeat=3):
         index_list.append("".join(i))
 
-    # ** Dynamic expansion if exhausted (unchanged behavior) **
+    # Dynamic expansion (unchanged)
     def expand_index_list():
         for length in range(4, 10):  # Start with 4-character combinations
             for combo in itertools.product(letters + digits, repeat=length):
                 yield "".join(combo)
 
-    # ---- Minimal helper: avoid Nitrogen names starting with 'NA' ----
+    # ---- Minimal helper 1: avoid Nitrogen names starting with 'NA' ----
     def next_suffix_not_starting_A(current_suffix):
         """Return current_suffix if safe; otherwise the next index not starting with 'A'."""
         try:
@@ -1425,31 +1425,44 @@ def atom_name_reindexing(mol_dict):
                 if not new_suffix.startswith('A'):
                     return new_suffix
 
-    # Debug: Print the generated index list and its length
+    # ---- Minimal helper 2: build full name preserving existing element token case ----
+    def build_full_name_preserving_case(atom, new_suffix):
+        """
+        Preserve the original case of the element token prefix from atom.name if it matches the element (case-insensitive).
+        Otherwise, fall back to atom.element.symbol as-is (original behavior).
+        """
+        elem_sym = atom.element.symbol  # e.g., 'Na' or 'N'
+        prefix_from_name = atom.name[:len(elem_sym)]
+        if prefix_from_name.upper() == elem_sym.upper():
+            elem_token = prefix_from_name  # keep the same case as already present in the name
+        else:
+            elem_token = elem_sym  # fallback to original symbol (unchanged behavior)
+        return elem_token + new_suffix
+
+    # Debug: Print the generated index list and its length (unchanged)
     print(f"Total pre-generated indices: {len(index_list)}")
 
-    atom_types_list = []  # list of lists where each sublist has 4 elements: name, class, element, mass
+    atom_types_list = []  # list of lists where each sublist has 4 elements
+    # name, class, element, mass
     atom_dict = {}
 
-    # Debug: Print the initial mol_dict keys and a brief summary
+    # Debug: Print the initial mol_dict keys and a brief summary (unchanged)
     print(f"Initial mol_dict keys: {list(mol_dict.keys())}")
     for key, mol in mol_dict.items():
         print("IN ATOM REINDEXING")
         print(f"Processing molecule key: {key}")
 
         for ind, atom in enumerate(mol["mol_pdb"]._residues[0]._atoms):
-            elem_sym = atom.element.symbol  # e.g., 'N', 'Na'
-            elem_up = elem_sym.upper()
-
             # current suffix (may be '')
+            elem_sym = atom.element.symbol
             atom_name = atom.name[len(elem_sym):]
 
             # --- Minimal fix point #1: if element is Nitrogen, ensure suffix doesn't start with 'A'
-            if elem_up == 'N':
+            if atom.element.symbol.upper() == 'N':
                 safe = next_suffix_not_starting_A(atom_name)
                 if safe != atom_name:
                     atom_name = safe
-                    full_name = elem_sym + atom_name
+                    full_name = build_full_name_preserving_case(atom, atom_name)
                     for res in mol["mol_pdb"]._residues:
                         res._atoms[ind].name = full_name
 
@@ -1460,7 +1473,8 @@ def atom_name_reindexing(mol_dict):
 
                 # Check if the next index is within bounds
                 try:
-                    cur_idx = index_list.index(atom.name[len(elem_sym):]) if atom.name[len(elem_sym):] in index_list else -1
+                    cur_suffix = atom.name[len(elem_sym):]
+                    cur_idx = index_list.index(cur_suffix) if cur_suffix in index_list else -1
                     if cur_idx <= prev_atom_ind:
                         if prev_atom_ind + 1 < len(index_list):
                             atom_name = index_list[prev_atom_ind + 1]
@@ -1471,40 +1485,40 @@ def atom_name_reindexing(mol_dict):
                             atom_name = new_suffix
 
                         # --- Minimal fix point #2: re-ensure Nitrogen doesn't get 'A*'
-                        if elem_up == 'N':
+                        if atom.element.symbol.upper() == 'N':
                             atom_name = next_suffix_not_starting_A(atom_name)
 
-                        full_name = elem_sym + atom_name
+                        full_name = build_full_name_preserving_case(atom, atom_name)
                         for r in mol["mol_pdb"]._residues:
                             r._atoms[ind].name = full_name
                         atom_dict[elem_sym] = atom_name
                     else:
                         # Even if keeping current suffix, ensure it's safe for Nitrogen
-                        if elem_up == 'N':
+                        if atom.element.symbol.upper() == 'N':
                             safe = next_suffix_not_starting_A(atom_name)
                             if safe != atom_name:
                                 atom_name = safe
-                                full_name = elem_sym + atom_name
+                                full_name = build_full_name_preserving_case(atom, atom_name)
                                 for r in mol["mol_pdb"]._residues:
                                     r._atoms[ind].name = full_name
                         atom_dict[elem_sym] = atom_name
                 except ValueError:
                     # Handle case where atom.name doesn't match the current index_list
                     atom_name = index_list[0]  # Reset to first valid name
-                    if elem_up == 'N':
+                    if atom.element.symbol.upper() == 'N':
                         atom_name = next_suffix_not_starting_A(atom_name)
-                    full_name = elem_sym + atom_name
+                    full_name = build_full_name_preserving_case(atom, atom_name)
                     atom_dict[elem_sym] = atom_name
                     for r in mol["mol_pdb"]._residues:
                         r._atoms[ind].name = full_name
 
-            # Debug record (use the possibly updated name)
-            full_name = elem_sym + atom_name
+            # Debug record (use the actually stored name, like the original did)
+            current_name = mol["mol_pdb"]._residues[0]._atoms[ind].name
             atom_types_list.append(
-                [full_name, full_name, elem_sym, atom.element.mass._value]
+                [current_name, current_name, atom.element.symbol, atom.element.mass._value]
             )
 
-    # Debug: Print final atom_dict and atom_types_list
+    # Debug: Print final atom_dict and atom_types_list (unchanged)
     print(f"Final atom_dict: {atom_dict}")
     print(f"Final atom_types_list: {atom_types_list}")
 
