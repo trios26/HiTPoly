@@ -670,8 +670,8 @@ source /etc/profile
 # CRITICAL FIX: Add our wrapper directory to the FRONT of the PATH.
 export PATH="{wrapper_dir}:$PATH"
 
-# Also add the real BOSS directory to the PATH for completeness
-export BOSSdir="/home_cluster/trios/ligpargen/BOSS"
+# Also add the real BOSS directory and set BOSSdir variable correctly
+export BOSSdir="{real_boss_dir}"
 export PATH="$BOSSdir:$PATH"
 
 # Set up conda robustly
@@ -734,6 +734,7 @@ echo "Job finished."
             time.sleep(10)
     else:
         print("\nERROR: Script execution failed. Please check STDERR above.")
+
 
 
 #Original
