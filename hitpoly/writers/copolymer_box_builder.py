@@ -543,6 +543,91 @@ def create_ligpargen(smiles, ligpargen_path, hitpoly_path, mol_filename, output_
     
     return mol_initial, smiles
 
+# def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
+#     """
+#     Generates and submits a self-contained SLURM script to run LigParGen.
+#     """
+#     # Get the LigParGen command from the environment variable set in .bashrc
+#     ligpargen_command = os.environ.get("LigParGen")
+#     if not ligpargen_command:
+#         print("Error: The 'LigParGen' environment variable is not set.")
+#         print("Please ensure your .bashrc defines: export LigParGen='python ...'")
+#         return
+
+#     print(f"LigParGen command: {ligpargen_command}")
+#     print(f"Working directory: {ligpargen_path}")
+#     print(f"Molecule file: {mol_filename}")
+
+#     # Use a multi-line f-string for a cleaner and more robust script
+#     # This script sets up its own environment instead of relying on .bashrc
+#     script_content = f"""#!/bin/bash
+# #SBATCH --job-name=ligpargen
+# #SBATCH --partition=xeon-p8
+# #SBATCH --nodes=1
+# #SBATCH --ntasks-per-node=1
+# #SBATCH --cpus-per-task=1
+# #SBATCH --time=2:00:00
+# #SBATCH --output={ligpargen_path}/ligpargen_%j.out
+# #SBATCH --error={ligpargen_path}/ligpargen_%j.err
+
+# # --- Environment Setup ---
+# echo "Setting up the job environment..."
+
+# # Source the system profile to get basic settings
+# source /etc/profile
+
+# # CRITICAL FIX: Explicitly define the path to the BOSS executable
+# # and add it to the PATH for this job.
+# export BOSSdir="/home/gridsan/trios/ligpargen/BOSS"
+# export PATH="$BOSSdir:$PATH"
+
+# # Set up conda robustly
+# # Find the base conda directory and source the official setup script
+# CONDA_BASE=$(conda info --base)
+# source "$CONDA_BASE/etc/profile.d/conda.sh"
+# conda activate htvs
+
+# echo "Environment is ready. PATH is now: $PATH"
+# echo "Python executable is: $(which python)"
+
+# # --- Run Program ---
+# echo "Changing directory to {ligpargen_path}"
+# cd "{ligpargen_path}"
+
+# echo "Starting LigParGen..."
+# {ligpargen_command} -m "{mol_filename}" -o 0 -c 0 -r "{output_prefix}" -d . -l
+
+# echo "Job finished."
+# """
+
+#     # --- Write and Submit Script ---
+#     script_path = os.path.join(ligpargen_path, "run.sh")
+#     with open(script_path, "w") as f:
+#         f.write(script_content)
+
+#     command = f"sbatch {script_path}"
+#     print(f"Submitting command: {command}")
+#     subprocess.run(command, shell=True)
+    
+#     # --- Wait for Output ---
+#     t0 = time.time()
+#     expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
+    
+#     print(f"Waiting for output file: {expected_output_file}...")
+#     while True:
+#         if os.path.exists(expected_output_file):
+#             time.sleep(2) # Wait a moment for the file to be fully written
+#             print(f"Success! Output file found.")
+#             break
+#         if time.time() - t0 > 300: # Timeout after 5 minutes
+#             print(f"Timeout: Output file was not found within 5 minutes.")
+#             print("Check the error log: {ligpargen_path}/ligpargen_*.err")
+#             break
+        
+#         time.sleep(10)
+
+##TEST
+
 def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
     """
     Generates and submits a self-contained SLURM script to run LigParGen.
@@ -559,7 +644,7 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
     print(f"Molecule file: {mol_filename}")
 
     # Use a multi-line f-string for a cleaner and more robust script
-    # This script sets up its own environment instead of relying on .bashrc
+    # This version includes extensive debugging to diagnose environment issues.
     script_content = f"""#!/bin/bash
 #SBATCH --job-name=ligpargen
 #SBATCH --partition=xeon-p8
@@ -570,8 +655,11 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
 #SBATCH --output={ligpargen_path}/ligpargen_%j.out
 #SBATCH --error={ligpargen_path}/ligpargen_%j.err
 
-# --- Environment Setup ---
-echo "Setting up the job environment..."
+# --- Environment Setup & DEBUGGING ---
+echo "--- Initial Environment ---"
+echo "User: $(whoami)"
+echo "Shell: $SHELL"
+echo "Initial PATH: $PATH"
 
 # Source the system profile to get basic settings
 source /etc/profile
@@ -581,16 +669,30 @@ source /etc/profile
 export BOSSdir="/home/gridsan/trios/ligpargen/BOSS"
 export PATH="$BOSSdir:$PATH"
 
+echo "--- After Setting BOSS Path ---"
+echo "PATH is now: $PATH"
+echo "Checking for BOSS executable with 'which':"
+which BOSS
+echo "Checking for BOSS executable with 'ls':"
+ls -l $BOSSdir/BOSS
+
+echo "--- Checking BOSS Library Dependencies (ldd) ---"
+ldd $BOSSdir/BOSS || echo "ldd command failed or BOSS has no dynamic dependencies."
+
 # Set up conda robustly
-# Find the base conda directory and source the official setup script
+echo "--- Setting up Conda ---"
 CONDA_BASE=$(conda info --base)
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate htvs
 
-echo "Environment is ready. PATH is now: $PATH"
+echo "--- After Activating Conda ---"
+echo "PATH is now: $PATH"
 echo "Python executable is: $(which python)"
+echo "Re-checking for BOSS executable after conda:"
+which BOSS
 
 # --- Run Program ---
+echo "--- Starting LigParGen ---"
 echo "Changing directory to {ligpargen_path}"
 cd "{ligpargen_path}"
 
@@ -621,11 +723,13 @@ echo "Job finished."
             break
         if time.time() - t0 > 300: # Timeout after 5 minutes
             print(f"Timeout: Output file was not found within 5 minutes.")
-            print("Check the error log: {ligpargen_path}/ligpargen_*.err")
+            print(f"Check the logs: {ligpargen_path}/ligpargen_*.out and *.err")
             break
         
         time.sleep(10)
 
+
+#Original
 # def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
 
 #     ligpargen = os.environ.get("LigParGen")
