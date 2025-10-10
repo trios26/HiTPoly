@@ -643,8 +643,8 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
     print(f"Working directory: {ligpargen_path}")
     print(f"Molecule file: {mol_filename}")
 
-    # Use a multi-line f-string for a cleaner and more robust script
-    # This version includes extensive debugging to diagnose environment issues.
+    # Use a multi-line f-string for a cleaner and more robust script.
+    # The fix is to ensure the main command is run from within the BOSS directory.
     script_content = f"""#!/bin/bash
 #SBATCH --job-name=ligpargen
 #SBATCH --partition=xeon-p8
@@ -655,48 +655,35 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
 #SBATCH --output={ligpargen_path}/ligpargen_%j.out
 #SBATCH --error={ligpargen_path}/ligpargen_%j.err
 
-# --- Environment Setup & DEBUGGING ---
-echo "--- Initial Environment ---"
-echo "User: $(whoami)"
-echo "Shell: $SHELL"
-echo "Initial PATH: $PATH"
+# --- Environment Setup ---
+echo "Setting up the job environment..."
 
 # Source the system profile to get basic settings
 source /etc/profile
 
-# CRITICAL FIX: Explicitly define the path to the BOSS executable
-# and add it to the PATH for this job.
+# Set the BOSS directory variable
 export BOSSdir="/home/gridsan/trios/ligpargen/BOSS"
+
+# Add the BOSS directory to the PATH so the shell can find the executable
 export PATH="$BOSSdir:$PATH"
 
-echo "--- After Setting BOSS Path ---"
-echo "PATH is now: $PATH"
-echo "Checking for BOSS executable with 'which':"
-which BOSS
-echo "Checking for BOSS executable with 'ls':"
-ls -l $BOSSdir/BOSS
-
-echo "--- Checking BOSS Library Dependencies (ldd) ---"
-ldd $BOSSdir/BOSS || echo "ldd command failed or BOSS has no dynamic dependencies."
-
 # Set up conda robustly
-echo "--- Setting up Conda ---"
 CONDA_BASE=$(conda info --base)
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate htvs
 
-echo "--- After Activating Conda ---"
-echo "PATH is now: $PATH"
+echo "Environment is ready. PATH is now: $PATH"
 echo "Python executable is: $(which python)"
-echo "Re-checking for BOSS executable after conda:"
-which BOSS
 
 # --- Run Program ---
-echo "--- Starting LigParGen ---"
+# CRITICAL FIX: Change to the ligpargen results directory FIRST.
+# The python script needs to be run from where the output should go.
 echo "Changing directory to {ligpargen_path}"
 cd "{ligpargen_path}"
 
 echo "Starting LigParGen..."
+# The LigParGen python script will internally call the BOSS executable.
+# Because BOSSdir is in the PATH, it will be found and executed correctly.
 {ligpargen_command} -m "{mol_filename}" -o 0 -c 0 -r "{output_prefix}" -d . -l
 
 echo "Job finished."
