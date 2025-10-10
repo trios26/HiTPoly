@@ -543,31 +543,78 @@ def create_ligpargen(smiles, ligpargen_path, hitpoly_path, mol_filename, output_
     
     return mol_initial, smiles
 
-def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
+# def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
 
+#     ligpargen = os.environ.get("LigParGen")
+#     print(f"LigParGen path: {ligpargen}")  # Debugging line
+#     print(f"Molecule filename: {mol_filename}")  # Debugging line
+#     print(f"Output prefix: {output_prefix}")  # Debugging line
+    
+#     with open(f"{ligpargen_path}/run.sh", "w") as f:
+#         f.write("#!/bin/bash" + "\n")
+#         f.write("#SBATCH --job-name=ligpargen" + "\n")
+#         f.write("#SBATCH --partition=xeon-p8" + "\n")
+#         f.write("#SBATCH --nodes=1" + "\n")
+#         f.write("#SBATCH --ntasks-per-node=1" + "\n")
+#         f.write("#SBATCH --cpus-per-task=1" + "\n")
+#         f.write("#SBATCH --time=2:00:00" + "\n")
+#         f.write("\n")
+#         f.write("# Load modules" + "\n")
+#         f.write("source /etc/profile" + "\n")
+#         f.write("source $HOME/.bashrc" + "\n")
+#         f.write("conda activate htvs" + "\n")
+#         f.write("export PYTHONPATH=$HOME/ligpargen:$PYTHONPATH" + "\n")
+#         f.write("cwd=$(pwd)" + "\n")
+#         f.write(f"cd {ligpargen_path}" + "\n")
+#         f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
+#         f.write("cd $cwd" + "\n")
+#     command = f"sbatch {ligpargen_path}/run.sh"
+#     subprocess.run(command, shell=True)
+#     # Wait for the output file (with output_prefix) to be generated
+#     t0 = time.time()
+#     expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
+#     while True:
+#         if os.path.exists(expected_output_file):
+#             time.sleep(2)
+#             print(f"Output file {expected_output_file} found.")
+#             break
+#         elif time.time() - t0 > 300:  # Timeout after 5 minutes
+#             print(f"Timeout: {expected_output_file} not found within the time limit.")
+#             break
+#         else:
+#             time.sleep(10)
+
+
+#TEST
+def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
     ligpargen = os.environ.get("LigParGen")
     print(f"LigParGen path: {ligpargen}")  # Debugging line
     print(f"Molecule filename: {mol_filename}")  # Debugging line
     print(f"Output prefix: {output_prefix}")  # Debugging line
     
     with open(f"{ligpargen_path}/run.sh", "w") as f:
-        f.write("#!/bin/bash" + "\n")
-        f.write("#SBATCH --job-name=ligpargen" + "\n")
-        f.write("#SBATCH --partition=xeon-p8" + "\n")
-        f.write("#SBATCH --nodes=1" + "\n")
-        f.write("#SBATCH --ntasks-per-node=1" + "\n")
-        f.write("#SBATCH --cpus-per-task=1" + "\n")
-        f.write("#SBATCH --time=2:00:00" + "\n")
+        f.write("#!/bin/bash\n")
+        f.write("#SBATCH --job-name=ligpargen\n")
+        f.write("#SBATCH --partition=xeon-p8\n")
+        f.write("#SBATCH --nodes=1\n")
+        f.write("#SBATCH --ntasks-per-node=1\n")
+        f.write("#SBATCH --cpus-per-task=1\n")
+        f.write("#SBATCH --time=2:00:00\n")
         f.write("\n")
-        f.write("# Load modules" + "\n")
-        f.write("source /etc/profile" + "\n")
-        f.write("source $HOME/.bashrc" + "\n")
-        f.write("conda activate htvs" + "\n")
-        f.write("export PYTHONPATH=$HOME/ligpargen:$PYTHONPATH" + "\n")
-        f.write("cwd=$(pwd)" + "\n")
-        f.write(f"cd {ligpargen_path}" + "\n")
+        f.write("# Load modules\n")
+        f.write("source /etc/profile\n")
+        f.write("source $HOME/.bashrc\n")
+        # --- minimal fix: make 'conda activate' work in non-interactive shells ---
+        f.write('command -v conda >/dev/null 2>&1 && eval "$(conda shell.bash hook)"\n')
+        f.write("conda activate htvs\n")
+        # --- minimal fix: ensure BOSS and ligpargen are on PATH inside the job ---
+        f.write("export BOSSdir=/home/gridsan/trios/ligpargen/BOSS\n")
+        f.write("export PATH=$BOSSdir:$HOME/ligpargen:$PATH\n")
+        f.write("export PYTHONPATH=$HOME/ligpargen:$PYTHONPATH\n")
+        f.write("cwd=$(pwd)\n")
+        f.write(f"cd {ligpargen_path}\n")
         f.write(f"{ligpargen} -m {mol_filename} -o 0 -c 0 -r {output_prefix} -d . -l\n")
-        f.write("cd $cwd" + "\n")
+        f.write("cd $cwd\n")
     command = f"sbatch {ligpargen_path}/run.sh"
     subprocess.run(command, shell=True)
     # Wait for the output file (with output_prefix) to be generated
@@ -580,9 +627,11 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
             break
         elif time.time() - t0 > 300:  # Timeout after 5 minutes
             print(f"Timeout: {expected_output_file} not found within the time limit.")
+            print("Check slurm-ligpargen.out / slurm-ligpargen.err and convert.log in that folder.")
             break
         else:
             time.sleep(10)
+
 
 
 # def perlmutter_ligpargen(ligpargen_path, mol_filename, output_prefix):
