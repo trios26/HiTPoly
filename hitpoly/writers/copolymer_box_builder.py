@@ -631,6 +631,7 @@ def create_ligpargen(smiles, ligpargen_path, hitpoly_path, mol_filename, output_
 def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
     """
     Generates and submits a self-contained SLURM script to run LigParGen.
+    This version creates a wrapper script to handle BOSS's working directory dependency.
     """
     # Get the LigParGen command from the environment variable set in .bashrc
     ligpargen_command = os.environ.get("LigParGen")
@@ -639,12 +640,30 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
         print("Please ensure your .bashrc defines: export LigParGen='python ...'")
         return
 
-    print(f"LigParGen command: {ligpargen_command}")
-    print(f"Working directory: {ligpargen_path}")
-    print(f"Molecule file: {mol_filename}")
+    # --- Create a Wrapper Script for BOSS ---
+    # This is the key fix to solve the working directory issue.
+    home_dir = os.path.expanduser("~")
+    real_boss_dir = os.path.join(home_dir, "ligpargen", "BOSS")
+    wrapper_dir = os.path.join(home_dir, "ligpargen", "bin_wrapper")
+    os.makedirs(wrapper_dir, exist_ok=True)
 
-    # Use a multi-line f-string for a cleaner and more robust script.
-    # The fix is to ensure the main command is run from within the BOSS directory.
+    wrapper_script_path = os.path.join(wrapper_dir, "BOSS")
+    wrapper_script_content = f"""#!/bin/bash
+# This script acts as a wrapper for the real BOSS executable.
+# It changes to the correct directory before running the program.
+cd "{real_boss_dir}" || exit 1
+exec ./BOSS "$@"
+"""
+    with open(wrapper_script_path, "w") as f:
+        f.write(wrapper_script_content)
+    
+    # Make the wrapper script executable
+    st = os.stat(wrapper_script_path)
+    os.chmod(wrapper_script_path, st.st_mode | stat.S_IEXEC)
+    
+    print(f"Created BOSS wrapper script at: {wrapper_script_path}")
+
+    # --- Generate the SLURM Submission Script ---
     script_content = f"""#!/bin/bash
 #SBATCH --job-name=ligpargen
 #SBATCH --partition=xeon-p8
@@ -661,10 +680,12 @@ echo "Setting up the job environment..."
 # Source the system profile to get basic settings
 source /etc/profile
 
-# Set the BOSS directory variable
-export BOSSdir="/home/gridsan/trios/ligpargen/BOSS"
+# CRITICAL FIX: Add our wrapper directory to the FRONT of the PATH.
+# This ensures our wrapper is called instead of the real BOSS executable.
+export PATH="{wrapper_dir}:$PATH"
 
-# Add the BOSS directory to the PATH so the shell can find the executable
+# Also add the real BOSS directory to the PATH for completeness
+export BOSSdir="/home/gridsan/trios/ligpargen/BOSS"
 export PATH="$BOSSdir:$PATH"
 
 # Set up conda robustly
@@ -676,14 +697,10 @@ echo "Environment is ready. PATH is now: $PATH"
 echo "Python executable is: $(which python)"
 
 # --- Run Program ---
-# CRITICAL FIX: Change to the ligpargen results directory FIRST.
-# The python script needs to be run from where the output should go.
 echo "Changing directory to {ligpargen_path}"
 cd "{ligpargen_path}"
 
 echo "Starting LigParGen..."
-# The LigParGen python script will internally call the BOSS executable.
-# Because BOSSdir is in the PATH, it will be found and executed correctly.
 {ligpargen_command} -m "{mol_filename}" -o 0 -c 0 -r "{output_prefix}" -d . -l
 
 echo "Job finished."
