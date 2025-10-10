@@ -631,8 +631,8 @@ def create_ligpargen(smiles, ligpargen_path, hitpoly_path, mol_filename, output_
 
 def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
     """
-    Generates and submits a self-contained SLURM script to run LigParGen.
-    This version creates a wrapper script to handle BOSS's working directory dependency.
+    Generates and executes a self-contained script to run LigParGen directly,
+    bypassing sbatch for debugging purposes.
     """
     # Get the LigParGen command from the environment variable set in .bashrc
     ligpargen_command = os.environ.get("LigParGen")
@@ -642,7 +642,6 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
         return
 
     # --- Create a Wrapper Script for BOSS ---
-    # This is the key fix to solve the working directory issue.
     home_dir = os.path.expanduser("~")
     real_boss_dir = os.path.join(home_dir, "ligpargen", "BOSS")
     wrapper_dir = os.path.join(home_dir, "ligpargen", "bin_wrapper")
@@ -651,42 +650,28 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
     wrapper_script_path = os.path.join(wrapper_dir, "BOSS")
     wrapper_script_content = f"""#!/bin/bash
 # This script acts as a wrapper for the real BOSS executable.
-# It changes to the correct directory before running the program.
 cd "{real_boss_dir}" || exit 1
 exec ./BOSS "$@"
 """
     with open(wrapper_script_path, "w") as f:
         f.write(wrapper_script_content)
     
-    # Make the wrapper script executable
     st = os.stat(wrapper_script_path)
     os.chmod(wrapper_script_path, st.st_mode | stat.S_IEXEC)
     
     print(f"Created BOSS wrapper script at: {wrapper_script_path}")
 
-    # --- Generate the SLURM Submission Script ---
+    # --- Generate the Execution Script (no SBATCH directives) ---
     script_content = f"""#!/bin/bash
-#SBATCH --job-name=ligpargen
-#SBATCH --partition=xeon-p8
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
-#SBATCH --time=2:00:00
-#SBATCH --output={ligpargen_path}/ligpargen_%j.out
-#SBATCH --error={ligpargen_path}/ligpargen_%j.err
-
 # --- Environment Setup ---
 echo "Setting up the job environment..."
-
-# Source the system profile to get basic settings
 source /etc/profile
 
 # CRITICAL FIX: Add our wrapper directory to the FRONT of the PATH.
-# This ensures our wrapper is called instead of the real BOSS executable.
 export PATH="{wrapper_dir}:$PATH"
 
 # Also add the real BOSS directory to the PATH for completeness
-export BOSSdir="/home/gridsan/trios/ligpargen/BOSS"
+export BOSSdir="/home_cluster/trios/ligpargen/BOSS"
 export PATH="$BOSSdir:$PATH"
 
 # Set up conda robustly
@@ -707,31 +692,48 @@ echo "Starting LigParGen..."
 echo "Job finished."
 """
 
-    # --- Write and Submit Script ---
+    # --- Write and Execute Script Directly ---
     script_path = os.path.join(ligpargen_path, "run.sh")
     with open(script_path, "w") as f:
         f.write(script_content)
+        
+    # Make the script executable
+    st = os.stat(script_path)
+    os.chmod(script_path, st.st_mode | stat.S_IEXEC)
 
-    command = f"sbatch {script_path}"
-    print(f"Submitting command: {command}")
-    subprocess.run(command, shell=True)
+    command = f"bash {script_path}"
+    print(f"Executing command directly: {command}")
+    
+    result = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+
+    print("\n--- SCRIPT STDOUT ---")
+    print(result.stdout.strip())
+    print("\n--- SCRIPT STDERR ---")
+    print(result.stderr.strip())
     
     # --- Wait for Output ---
-    t0 = time.time()
-    expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
-    
-    print(f"Waiting for output file: {expected_output_file}...")
-    while True:
-        if os.path.exists(expected_output_file):
-            time.sleep(2) # Wait a moment for the file to be fully written
-            print(f"Success! Output file found.")
-            break
-        if time.time() - t0 > 300: # Timeout after 5 minutes
-            print(f"Timeout: Output file was not found within 5 minutes.")
-            print(f"Check the logs: {ligpargen_path}/ligpargen_*.out and *.err")
-            break
+    if result.returncode == 0:
+        t0 = time.time()
+        expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
         
-        time.sleep(10)
+        print(f"\nWaiting for output file: {expected_output_file}...")
+        while True:
+            if os.path.exists(expected_output_file):
+                time.sleep(2) # Wait a moment for the file to be fully written
+                print(f"Success! Output file found.")
+                break
+            if time.time() - t0 > 300: # Timeout after 5 minutes
+                print(f"Timeout: Output file was not found within 5 minutes.")
+                break
+            
+            time.sleep(10)
+    else:
+        print("\nERROR: Script execution failed. Please check STDERR above.")
 
 
 #Original
