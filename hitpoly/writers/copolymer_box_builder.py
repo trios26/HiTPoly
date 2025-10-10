@@ -15,6 +15,7 @@ import itertools
 from openbabel import pybel
 import subprocess
 from typing import Union
+import stat
 
 from rdkit import Chem
 from rdkit.Geometry import Point3D
