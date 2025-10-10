@@ -606,7 +606,7 @@ def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
         f.write("source $HOME/.bashrc\n")
         # --- minimal fix: make 'conda activate' work in non-interactive shells ---
         f.write('command -v conda >/dev/null 2>&1 && eval "$(conda shell.bash hook)"\n')
-        f.write("conda activate htvs\n")
+        f.write("conda activate ligpargen\n")
         # --- minimal fix: ensure BOSS and ligpargen are on PATH inside the job ---
         f.write("export BOSSdir=/home/gridsan/trios/ligpargen/BOSS\n")
         f.write("export PATH=$BOSSdir:$HOME/ligpargen:$PATH\n")
