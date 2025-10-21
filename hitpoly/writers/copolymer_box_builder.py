@@ -544,196 +544,33 @@ def create_ligpargen(smiles, ligpargen_path, hitpoly_path, mol_filename, output_
     
     return mol_initial, smiles
 
-# def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
-#     """
-#     Generates and submits a self-contained SLURM script to run LigParGen.
-#     """
-#     # Get the LigParGen command from the environment variable set in .bashrc
-#     ligpargen_command = os.environ.get("LigParGen")
-#     if not ligpargen_command:
-#         print("Error: The 'LigParGen' environment variable is not set.")
-#         print("Please ensure your .bashrc defines: export LigParGen='python ...'")
-#         return
-
-#     print(f"LigParGen command: {ligpargen_command}")
-#     print(f"Working directory: {ligpargen_path}")
-#     print(f"Molecule file: {mol_filename}")
-
-#     # Use a multi-line f-string for a cleaner and more robust script
-#     # This script sets up its own environment instead of relying on .bashrc
-#     script_content = f"""#!/bin/bash
-# #SBATCH --job-name=ligpargen
-# #SBATCH --partition=xeon-p8
-# #SBATCH --nodes=1
-# #SBATCH --ntasks-per-node=1
-# #SBATCH --cpus-per-task=1
-# #SBATCH --time=2:00:00
-# #SBATCH --output={ligpargen_path}/ligpargen_%j.out
-# #SBATCH --error={ligpargen_path}/ligpargen_%j.err
-
-# # --- Environment Setup ---
-# echo "Setting up the job environment..."
-
-# # Source the system profile to get basic settings
-# source /etc/profile
-
-# # CRITICAL FIX: Explicitly define the path to the BOSS executable
-# # and add it to the PATH for this job.
-# export BOSSdir="/home/gridsan/trios/ligpargen/BOSS"
-# export PATH="$BOSSdir:$PATH"
-
-# # Set up conda robustly
-# # Find the base conda directory and source the official setup script
-# CONDA_BASE=$(conda info --base)
-# source "$CONDA_BASE/etc/profile.d/conda.sh"
-# conda activate htvs
-
-# echo "Environment is ready. PATH is now: $PATH"
-# echo "Python executable is: $(which python)"
-
-# # --- Run Program ---
-# echo "Changing directory to {ligpargen_path}"
-# cd "{ligpargen_path}"
-
-# echo "Starting LigParGen..."
-# {ligpargen_command} -m "{mol_filename}" -o 0 -c 0 -r "{output_prefix}" -d . -l
-
-# echo "Job finished."
-# """
-
-#     # --- Write and Submit Script ---
-#     script_path = os.path.join(ligpargen_path, "run.sh")
-#     with open(script_path, "w") as f:
-#         f.write(script_content)
-
-#     command = f"sbatch {script_path}"
-#     print(f"Submitting command: {command}")
-#     subprocess.run(command, shell=True)
-    
-#     # --- Wait for Output ---
-#     t0 = time.time()
-#     expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
-    
-#     print(f"Waiting for output file: {expected_output_file}...")
-#     while True:
-#         if os.path.exists(expected_output_file):
-#             time.sleep(2) # Wait a moment for the file to be fully written
-#             print(f"Success! Output file found.")
-#             break
-#         if time.time() - t0 > 300: # Timeout after 5 minutes
-#             print(f"Timeout: Output file was not found within 5 minutes.")
-#             print("Check the error log: {ligpargen_path}/ligpargen_*.err")
-#             break
-        
-#         time.sleep(10)
-
-##TEST
-
-def supercloud_ligpargen(ligpargen_path, mol_filename, output_prefix):
-    """
-    Generates and executes a self-contained script to run LigParGen directly,
-    bypassing sbatch for debugging purposes.
-    """
-    # Get the LigParGen command from the environment variable set in .bashrc
-    ligpargen_command = os.environ.get("LigParGen")
-    if not ligpargen_command:
-        print("Error: The 'LigParGen' environment variable is not set.")
-        print("Please ensure your .bashrc defines: export LigParGen='python ...'")
-        return
-
-    # --- Create a Wrapper Script for BOSS ---
-    home_dir = os.path.expanduser("~")
-    real_boss_dir = os.path.join(home_dir, "ligpargen", "BOSS")
-    wrapper_dir = os.path.join(home_dir, "ligpargen", "bin_wrapper")
-    os.makedirs(wrapper_dir, exist_ok=True)
-
-    wrapper_script_path = os.path.join(wrapper_dir, "BOSS")
-    wrapper_script_content = f"""#!/bin/bash
-# This script acts as a wrapper for the real BOSS executable.
-cd "{real_boss_dir}" || exit 1
-exec ./BOSS "$@"
-"""
-    with open(wrapper_script_path, "w") as f:
-        f.write(wrapper_script_content)
-    
-    st = os.stat(wrapper_script_path)
-    os.chmod(wrapper_script_path, st.st_mode | stat.S_IEXEC)
-    
-    print(f"Created BOSS wrapper script at: {wrapper_script_path}")
-
-    # --- Generate the Execution Script (no SBATCH directives) ---
-    script_content = f"""#!/bin/bash
-# --- Environment Setup ---
-echo "Setting up the job environment..."
-source /etc/profile
-
-# CRITICAL FIX: Add our wrapper directory to the FRONT of the PATH.
-export PATH="{wrapper_dir}:$PATH"
-
-# Also add the real BOSS directory and set BOSSdir variable correctly
-export BOSSdir="{real_boss_dir}"
-export PATH="$BOSSdir:$PATH"
-
-# Set up conda robustly
-CONDA_BASE=$(conda info --base)
-source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda activate htvs
-
-echo "Environment is ready. PATH is now: $PATH"
-echo "Python executable is: $(which python)"
-
-# --- Run Program ---
-echo "Changing directory to {ligpargen_path}"
-cd "{ligpargen_path}"
-
-echo "Starting LigParGen..."
-{ligpargen_command} -m "{mol_filename}" -o 0 -c 0 -r "{output_prefix}" -d . -l
-
-echo "Job finished."
-"""
-
-    # --- Write and Execute Script Directly ---
-    script_path = os.path.join(ligpargen_path, "run.sh")
-    with open(script_path, "w") as f:
-        f.write(script_content)
-        
-    # Make the script executable
-    st = os.stat(script_path)
-    os.chmod(script_path, st.st_mode | stat.S_IEXEC)
-
-    command = f"bash {script_path}"
-    print(f"Executing command directly: {command}")
-    
-    result = subprocess.run(
-        command,
-        shell=True,
-        capture_output=True,
-        text=True
-    )
-
-    print("\n--- SCRIPT STDOUT ---")
-    print(result.stdout.strip())
-    print("\n--- SCRIPT STDERR ---")
-    print(result.stderr.strip())
-    
-    # --- Wait for Output ---
-    if result.returncode == 0:
-        t0 = time.time()
-        expected_output_file = os.path.join(ligpargen_path, f"{output_prefix}.xml")
-        
-        print(f"\nWaiting for output file: {expected_output_file}...")
-        while True:
-            if os.path.exists(expected_output_file):
-                time.sleep(2) # Wait a moment for the file to be fully written
-                print(f"Success! Output file found.")
-                break
-            if time.time() - t0 > 300: # Timeout after 5 minutes
-                print(f"Timeout: Output file was not found within 5 minutes.")
-                break
-            
+def supercloud_ligpargen(ligpargen_path, resid_name):
+    with open(f"{ligpargen_path}/run.sh", "w") as f:
+        f.write("#!/bin/bash" + "\n")
+        f.write("#SBATCH --job-name=ligpargen" + "\n")
+        f.write("#SBATCH --partition=xeon-p8" + "\n")
+        f.write("#SBATCH --nodes=1" + "\n")
+        f.write("#SBATCH --ntasks-per-node=1" + "\n")
+        f.write("#SBATCH --cpus-per-task=1" + "\n")
+        f.write("#SBATCH --time=2:00:00" + "\n")
+        f.write("\n")
+        f.write("cwd=$(pwd)" + "\n")
+        f.write(f"cd {ligpargen_path}" + "\n")
+        f.write(f"export XDG_DATA_HOME=/state/partition1/user/$(id -un)" + "\n")
+        f.write(f"podman load -i $HOME/containers/ligpargen.tar" + "\n")
+        f.write(f"podman run --rm -w /app/RUN -v .:/app/RUN:Z -v .:/app/RUN:Z ligpargen:latest python ../LigParGen/Converter.py -m poly.mol -o 0 -c 0 -r {resid_name} -d . -l" + "\n")
+        f.write("cd $cwd" + "\n")
+    command = f"sbatch {ligpargen_path}/run.sh"
+    subprocess.run(command, shell=True)
+    t0 = time.time()
+    while True:
+        if os.path.exists("PLY.xml"):
+            time.sleep(2)
+            break
+        elif time.time() - t0 > 300:
+            break
+        else:
             time.sleep(10)
-    else:
-        print("\nERROR: Script execution failed. Please check STDERR above.")
 
 
 
