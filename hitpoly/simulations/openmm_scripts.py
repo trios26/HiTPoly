@@ -1233,145 +1233,107 @@ def write_analysis_script(
                 f" --repeat_units {repeat_units} -n $NAME -f {xyz_output} -temp {simu_temperature} --platform {platform}"
                 + f" --cat {cation} --ani {anion} --ani_rdf {ani_name_rdf} \n"
             )
-
-##New
-def tg_simulations(
+            
+def prod_run_tg(
     save_path,
     final_save_path,
-    prod_run_time=5.0,  # nanoseconds
-    start_temperature=450.0,
-    end_temperature=200.0,
-    temperature_step=25.0
+    simu_time,
+    start_temperature=500,
+    end_temperature=100,
+    temperature_step=20,
+    logperiod=5000,
+    mdOutputTime=12500,
+    timestep=0.002,
+    extra_name=None,
+    simu_pressure=1,
+    cuda_device="0",
+    fraction_froze=None,
 ):
-    """
-    Perform Tg simulation temperature/pressure sweeps in OpenMM,
-    mirroring the GROMACS scheme from ACS Appl. Polym. Mater. 2021 and ACS Macro Lett. 2023.
+    integrator, barostat, barostat_id, simulation, system, modeller = (
+        iniatilize_simulation(
+            save_path=save_path,
+            final_save_path=final_save_path,
+            temperature=start_temperature,
+            pressure=simu_pressure,
+            cuda_device=cuda_device,
+            equilibration=True,
+            barostat=True,
+            timestep=timestep,
+            fraction_froze=fraction_froze,
+        )
+    )
 
-    Steps:
-    1. Energy relaxation
-    2. Short NPT conditioning cycles
-    3. Production NPT runs scanning temperatures
-    4. Analysis of density vs temperature
-    """
-    os.makedirs(save_path, exist_ok=True)
-    os.makedirs(final_save_path, exist_ok=True)
+    # ns to ps
+    simu_steps = (simu_time * 1000) / timestep
 
-    # 1. Energy relaxation
-    print("Starting energy relaxation...")
-    equilibrate_system_1(save_path=save_path, final_save_path=final_save_path)
-    equilibrate_system_2(save_path=save_path, final_save_path=final_save_path)
+    simulation.reporters.append(
+        StateDataReporter(
+            f"{save_path}/simulation.log",
+            logperiod,
+            step=True,
+            time=True,
+            potentialEnergy=True,
+            kineticEnergy=True,
+            totalEnergy=True,
+            temperature=True,
+            progress=True,
+            volume=True,
+            density=True,
+            speed=True,
+            totalSteps=simu_steps,
+            separator="\t",
+        )
+    )
 
-    # 2. Short NPT conditioning cycles around t1
-    t1 = start_temperature
-    temps = [t1 + 70, t1 + 70, t1 + 20, t1 + 20, t1,
-             t1 + 20, t1, t1 + 20, t1, t1 + 20, t1]
-    pressures = [1, 100, 1, 100, 1, 1, 1, 1, 1, 1, 1]
-    print("Running short NPT conditioning cycles...")
-    for i, (temp, pres) in enumerate(zip(temps, pressures)):
-        print(f" Cycle {i+1}: T={temp} K, P={pres} bar")
-        integrator, barostat, barostat_id, simulation, system, modeller = \
-            initialize_simulation(
-                save_path=save_path,
-                final_save_path=final_save_path,
-                temperature=temp,
-                pressure=pres,
-                equilibration=True,
-                barostat=True,
-                timestep=0.001
+    simulation.reporters.append(
+        PDBReporter(f"{save_path}/simu_output.pdb", mdOutputTime)
+    )
+    simulation.reporters.append(
+        StateDataReporter(
+            stdout,
+            mdOutputTime,
+            step=True,
+            potentialEnergy=True,
+            temperature=True,
+            speed=True,
+            density=True,
+        )
+    )
+
+    print(f"Starting production Tg run at {start_temperature} K and end at {end_temperature} K")
+
+    for ind, t in enumerate(
+            np.arange(end_temperature, start_temperature + 1, temperature_step)[::-1]
+        ):
+        integrator.setTemperature(t * kelvin)
+        simulation.context.setParameter(barostat.Temperature(), t * kelvin)
+        simulation.step(simu_steps)
+
+        if ind%5 == 0:
+            final_state = simulation.context.getState(
+                getPositions=True, getVelocities=True, getParameters=True
             )
-        # 2 ps at 1 fs timestep => 2000 steps
-        npt_run(
-            integrator, simulation,
-            simu_time=2000,
-            temperature=temp * kelvin,
-            pressure=pres * bar,
-            barostat=barostat
-        )
-        # Save state & box
-        state = simulation.context.getState(
-            getPositions=True, getVelocities=True, getParameters=True
-        )
-        xml_out = os.path.join(final_save_path, f"state_cycle_{i+1}.xml")
-        with open(xml_out, 'w') as f:
-            f.write(XmlSerializer.serialize(state))
-        pos = state.getPositions()
-        PDBFile.writeFile(
-            modeller.topology, pos,
-            open(os.path.join(save_path, f"box_cycle_{i+1}.pdb"), 'w')
-        )
 
-    # 3. Production NPT runs scanning temperature
-    print("Running production NPT runs...")
-    scan_temps = np.arange(end_temperature, start_temperature + 1, temperature_step)[::-1]
-    for idx, T in enumerate(scan_temps):
-        print(f" Prod cycle {idx+1}: T={T} K")
-        integrator, barostat, barostat_id, simulation, system, modeller = \
-            initialize_simulation(
-                save_path=save_path,
-                final_save_path=final_save_path,
-                temperature=T,
-                pressure=1,
-                equilibration=True,
-                barostat=True,
-                timestep=0.002
+            final_state_file = (
+                f"{save_path}/final_state_{int(t)}.xml"
             )
-        extra_ps = 10000 if idx == 0 else 0
-        total_ps = prod_run_time * 1000 + extra_ps
-        npt_run(
-            integrator, simulation,
-            simu_time=total_ps / 0.002,
-            temperature=T * kelvin,
-            pressure=1 * bar,
-            barostat=barostat
-        )
-        state = simulation.context.getState(
-            getPositions=True, getVelocities=True, getParameters=True
-        )
-        xml_out = os.path.join(save_path, f"state_prod_T{int(T)}.xml")
-        with open(xml_out, 'w') as f:
-            f.write(XmlSerializer.serialize(state))
-        pos = state.getPositions()
-        PDBFile.writeFile(
-            modeller.topology, pos,
-            open(os.path.join(save_path, f"box_prod_T{int(T)}.pdb"), 'w')
-        )
 
-    print("Tg simulation completed. All states and PDBs saved.")
+            with open(final_state_file, "w") as f:
+                f.write(XmlSerializer.serialize(final_state))
 
-    # 4. Analyze results automatically
-    analyze_tg_results(final_save_path)
+            if ind > 0:
+                prev_state_file = (
+                    f"{save_path}/final_state_{int(t+5*temperature_step)}.xml"
+                )
+                os.remove(prev_state_file)
 
+            minpositions = simulation.context.getState(getPositions=True).getPositions()
+            modeller.topology.setPeriodicBoxVectors(final_state.getPeriodicBoxVectors())
+            print(
+                f"Post minimization box dimension along the X axis: {final_state.getPeriodicBoxVectors()[0]._value}"
+            )
+            with open(f"{save_path}/final_state_box.pdb", "w") as f:
+                PDBFile.writeFile(modeller.topology, minpositions, f)
 
-
-def analyze_tg_results(
-    final_save_path: str,
-    output_plot: str = "density_vs_temp.png"
-):
-    """
-    Analyze Tg simulation results by extracting densities from production boxes
-    and plotting density vs temperature to identify Tg.
-    """
-    temps = []
-    densities = []
-    for fname in os.listdir(final_save_path):
-        if fname.startswith("box_prod_T") and fname.endswith(".pdb"):
-            T = int(fname.replace("box_prod_T", "").replace(".pdb", ""))
-            u = mda.Universe(os.path.join(final_save_path, fname))
-            dims = u.atoms.dimensions
-            vol_ang3 = dims[0] * dims[1] * dims[2]
-            mass_amu = sum(atom.mass for atom in u.atoms)
-            density = (mass_amu * 1.66054e-24) / (vol_ang3 * 1e-24)
-            temps.append(T)
-            densities.append(density)
-    temps, densities = zip(*sorted(zip(temps, densities)))
-    plt.figure()
-    plt.plot(temps, densities, marker='o')
-    plt.xlabel("Temperature (K)")
-    plt.ylabel("Density (g/cm³)")
-    plt.title("Density vs Temperature")
-    plt.tight_layout()
-    output_path = os.path.join(final_save_path, output_plot)
-    plt.savefig(output_path)
-    print(f"Density vs Temperature plot saved to {output_path}")
 
 
